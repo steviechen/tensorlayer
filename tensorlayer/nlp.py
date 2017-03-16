@@ -545,7 +545,8 @@ def build_reverse_dictionary(word_to_id):
     reverse_dictionary = dict(zip(word_to_id.values(), word_to_id.keys()))
     return reverse_dictionary
 
-def build_words_dataset(words=[], vocabulary_size=50000, printable=True, unk_key = 'UNK'):
+def build_words_dataset(words=[], vocabulary_size=50000, printable=True, unk_key = '<UNK>',
+                        initial_count=[]):
     """Build the words dictionary and replace rare words with 'UNK' token.
     The most common word has the smallest integer id.
 
@@ -561,6 +562,7 @@ def build_words_dataset(words=[], vocabulary_size=50000, printable=True, unk_key
         Whether to print the read vocabulary size of the given words.
     unk_key : a string
         Unknown words = unk_key
+    initial_count: list of lists of key and -1. For example, use [['<PAD>', -1], ['<GO>', -1], ['<EOS>', -1]] for building dictionary for seq2seq
 
     Returns
     --------
@@ -586,8 +588,8 @@ def build_words_dataset(words=[], vocabulary_size=50000, printable=True, unk_key
     - `tensorflow/examples/tutorials/word2vec/word2vec_basic.py <https://github.com/tensorflow/tensorflow/blob/r0.7/tensorflow/examples/tutorials/word2vec/word2vec_basic.py>`_
     """
     import collections
-    count = [[unk_key, -1]]
-    count.extend(collections.Counter(words).most_common(vocabulary_size - 1))
+    count = initial_count+[[unk_key, -1]]
+    count.extend(collections.Counter(words).most_common(vocabulary_size - len(count)))
     dictionary = dict()
     for word, _ in count:
         dictionary[word] = len(dictionary)
@@ -597,10 +599,10 @@ def build_words_dataset(words=[], vocabulary_size=50000, printable=True, unk_key
         if word in dictionary:
             index = dictionary[word]
         else:
-            index = 0  # dictionary['UNK']
+            index = dictionary[unk_key]#0  # dictionary['<UNK>']
             unk_count += 1
         data.append(index)
-    count[0][1] = unk_count
+    count[dictionary[unk_key]][1] = unk_count
     reverse_dictionary = dict(zip(dictionary.values(), dictionary.keys()))
     if printable:
         print('Real vocabulary size    %d' % len(collections.Counter(words).keys()))
