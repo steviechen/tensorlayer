@@ -719,7 +719,7 @@ def save_vocab(count=[], name='vocab.txt'):
     """
     pwd = os.getcwd()
     vocabulary_size = len(count)
-    with open(os.path.join(pwd, name), "w") as f:
+    with open(os.path.join(pwd, name), "w", encoding='utf-8') as f:
         for i in xrange(vocabulary_size):
             f.write("%s %d\n" % (tf.compat.as_text(count[i][0]), count[i][1]))
     print("%d vocab saved to %s in %s" % (vocabulary_size, name, pwd))
