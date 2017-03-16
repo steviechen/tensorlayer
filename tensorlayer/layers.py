@@ -303,9 +303,9 @@ class Layer(object):
         return n_params
 
     def __str__(self):
-        print("\nIt is a Layer class")
-        self.print_params(False)
-        self.print_layers()
+        # print("\nIt is a Layer class")
+        # self.print_params(False)
+        # self.print_layers()
         return "  Last layer is: %s" % self.__class__.__name__
 
 ## Input layer
@@ -3593,6 +3593,30 @@ def retrieve_seq_length_op2(data):
     return tf.reduce_sum(tf.cast(tf.greater(data, tf.zeros_like(data)), tf.int32), 1)
 
 
+def retrieve_seq_length_op3(data, pad_val=0):
+    data_shape_size = data.get_shape().ndims
+    if data_shape_size == 3:
+        return tf.reduce_sum(tf.cast(tf.reduce_any(tf.not_equal(data, pad_val), axis=2), dtype=tf.int32), 1)
+    elif data_shape_size == 2:
+        return tf.reduce_sum(tf.cast(tf.not_equal(data, pad_val), dtype=tf.int32), 1)
+    elif data_shape_size == 1:
+        raise ValueError("retrieve_seq_length_op3: data has wrong shape!")
+    else:
+        raise ValueError("retrieve_seq_length_op3: handling data_shape_size %s hasn't been implemented!" % (data_shape_size))
+
+
+def target_mask_op(data, pad_val=0):
+    data_shape_size = data.get_shape().ndims
+    if data_shape_size == 3:
+        return tf.cast(tf.reduce_any(tf.not_equal(data, pad_val), axis=2), dtype=tf.int32)
+    elif data_shape_size == 2:
+        return tf.cast(tf.not_equal(data, pad_val), dtype=tf.int32)
+    elif data_shape_size == 1:
+        raise ValueError("target_mask_op: data has wrong shape!")
+    else:
+        raise ValueError("target_mask_op: handling data_shape_size %s hasn't been implemented!" % (data_shape_size))
+
+
 # Dynamic RNN
 class DynamicRNNLayer(Layer):
     """
@@ -3698,6 +3722,7 @@ class DynamicRNNLayer(Layer):
         n_layer = 1,
         return_last = False,
         return_seq_2d = False,
+        dynamic_rnn_init_args={},
         name = 'dyrnn_layer',
     ):
         Layer.__init__(self, name=name)
@@ -3788,6 +3813,7 @@ class DynamicRNNLayer(Layer):
                 # dtype=tf.float64,
                 sequence_length=sequence_length,
                 initial_state = self.initial_state,
+                **dynamic_rnn_init_args
                 )
             rnn_variables = tf.get_collection(TF_GRAPHKEYS_VARIABLES, scope=vs.name)
 
@@ -3922,6 +3948,7 @@ class BiDynamicRNNLayer(Layer):
         n_layer = 1,
         return_last = False,
         return_seq_2d = False,
+        dynamic_rnn_init_args={},
         name = 'bi_dyrnn_layer',
     ):
         Layer.__init__(self, name=name)
@@ -4016,6 +4043,7 @@ class BiDynamicRNNLayer(Layer):
                 sequence_length=sequence_length,
                 initial_state_fw=self.fw_initial_state,
                 initial_state_bw=self.bw_initial_state,
+                **dynamic_rnn_init_args
             )
             rnn_variables = tf.get_collection(TF_GRAPHKEYS_VARIABLES, scope=vs.name)
 

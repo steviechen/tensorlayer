@@ -1255,7 +1255,8 @@ def pad_sequences(sequences, maxlen=None, dtype='int32', padding='post', truncat
             sample_shape = np.asarray(s).shape[1:]
             break
 
-    x = (np.ones((nb_samples, maxlen) + sample_shape) * value).astype(dtype)
+    #x = (np.ones((nb_samples, maxlen) + sample_shape) * value).astype(dtype)
+    x = np.full(shape=(nb_samples, maxlen) + sample_shape, fill_value=value).astype(dtype)
     for idx, s in enumerate(sequences):
         if len(s) == 0:
             continue  # empty list was found
@@ -1267,18 +1268,145 @@ def pad_sequences(sequences, maxlen=None, dtype='int32', padding='post', truncat
             raise ValueError('Truncating type "%s" not understood' % truncating)
 
         # check `trunc` has expected shape
-        trunc = np.asarray(trunc, dtype=dtype)
-        if trunc.shape[1:] != sample_shape:
-            raise ValueError('Shape of sample %s of sequence at position %s is different from expected shape %s' %
-                             (trunc.shape[1:], idx, sample_shape))
+        if dtype!='object':
+            trunc = np.asarray(trunc, dtype=dtype)
+            if trunc.shape[1:] != sample_shape:
+                raise ValueError('Shape of sample %s of sequence at position %s is different from expected shape %s' %
+                                 (trunc.shape[1:], idx, sample_shape))
 
-        if padding == 'post':
-            x[idx, :len(trunc)] = trunc
-        elif padding == 'pre':
-            x[idx, -len(trunc):] = trunc
+            if padding == 'post':
+                x[idx, :len(trunc)] = trunc
+            elif padding == 'pre':
+                x[idx, -len(trunc):] = trunc
+            else:
+                raise ValueError('Padding type "%s" not understood' % padding)
         else:
-            raise ValueError('Padding type "%s" not understood' % padding)
+            if padding == 'post':
+                x[idx] = trunc + [value for _ in range(maxlen-len(trunc))]
+            elif padding == 'pre':
+                x[idx] = [value for _ in range(maxlen-len(trunc))] + trunc
+            else:
+                raise ValueError('Padding type "%s" not understood' % padding)
+
     return x
+
+
+def pad_sequences_3d(sequences, maxlen1=None, maxlen2=None, dtype='int32', padding='post', truncating='pre', value=0.):
+    """Pads each sequence to the same length:
+    the length of the longest sequence.
+    If maxlen is provided, any sequence longer
+    than maxlen is truncated to maxlen.
+    Truncation happens off either the beginning (default) or
+    the end of the sequence.
+    Supports post-padding and pre-padding (default).
+
+    Parameters
+    ----------
+    sequences : list of lists where each element is a sequence
+    maxlen : int, maximum length
+    dtype : type to cast the resulting sequence.
+    padding : 'pre' or 'post', pad either before or after each sequence.
+    truncating : 'pre' or 'post', remove values from sequences larger than
+        maxlen either in the beginning or in the end of the sequence
+    value : float, value to pad the sequences to the desired value.
+
+    Returns
+    ----------
+    x : numpy array with dimensions (number_of_sequences, maxlen)
+
+    Examples
+    ----------
+    >>> sequences = [[1,1,1,1,1],[2,2,2],[3,3]]
+    >>> sequences = pad_sequences(sequences, maxlen=None, dtype='int32',
+    ...                  padding='post', truncating='pre', value=0.)
+    ... [[1 1 1 1 1]
+    ...  [2 2 2 0 0]
+    ...  [3 3 0 0 0]]
+    """
+    #lengths = [len(s) for s in sequences]
+
+    if truncating not in ('pre', 'post', 'ordered_random', 'random'):
+        raise ValueError('Truncating type "%s" not understood' % truncating)
+
+    if maxlen1 is None and maxlen2 is None:
+        truncating='none'
+
+    if padding not in ('pre', 'post'):
+        raise ValueError('Padding type "%s" not understood' % padding)
+
+    nb_samples = len(sequences)
+    if maxlen1 is None:
+        maxlen1 = np.max([len(sub_seq) for sub_seq in sequences])
+    if maxlen2 is None:
+        maxlen2 = np.max([len(seq) for sub_seq in sequences for seq in sub_seq])
+
+    # take the sample shape from the first non empty sequence
+    # checking for consistency in the main loop below.
+    sample_shape = tuple()
+    for seq in [seq for sub_seq in sequences for seq in sub_seq]:
+        if len(seq) > 0:
+            sample_shape = np.asarray(seq).shape[1:]
+            break
+
+    if dtype in ('str', 'string'):
+        max_str_len=max([len(s) for sub_seq in sequences for seq in sub_seq for s in seq])
+        dtype='<U%d' % max_str_len
+
+    #x = (np.ones((nb_samples, maxlen) + sample_shape) * value).astype(dtype)
+    x = np.full(shape=(nb_samples, maxlen1, maxlen2) + sample_shape, fill_value=value).astype(dtype)
+    for sub_seq_idx, sub_seq in enumerate(sequences):
+        sub_seq_len=len(sub_seq)
+        if sub_seq_len == 0:
+            continue  # empty list was found
+        elif sub_seq_len>maxlen1:
+            if truncating == 'pre':
+                sub_seq = sub_seq[-maxlen1:]
+            elif truncating == 'post':
+                sub_seq = sub_seq[:maxlen1]
+            elif truncating == 'ordered_random':
+                sub_seq = [sub_seq[i] for i in sorted(random.sample(range(sub_seq_len), maxlen1))]
+            elif truncating == 'random':
+                sub_seq=sub_seq.copy()
+                random.shuffle(sub_seq)
+                sub_seq = sub_seq[:maxlen1]
+
+        for idx, seq in enumerate(sub_seq):
+            seq_len=len(seq)
+            if seq_len == 0:
+                continue  # empty list was found
+            elif seq_len > maxlen2:
+                if truncating == 'pre':
+                    seq = seq[-maxlen2:]
+                elif truncating == 'post':
+                    seq = seq[:maxlen2]
+                elif truncating == 'ordered_random':
+                    seq = [seq[i] for i in sorted(random.sample(range(seq_len), maxlen2))]
+                elif truncating == 'random':
+                    seq = seq.copy()
+                    random.shuffle(seq)
+                    seq = seq[:maxlen2]
+
+            # check `trunc` has expected shape
+            #if dtype!='object':
+            seq = np.asarray(seq, dtype=dtype)
+            if seq.shape[1:] != sample_shape:
+                raise ValueError('Shape of sample %s of sequence at position %s:%s is different from expected shape %s' %
+                                 (seq.shape[1:], sub_seq_idx, idx, sample_shape))
+
+            if padding == 'post':
+                x[sub_seq_idx, idx, :len(seq)] = seq
+            elif padding == 'pre':
+                x[sub_seq_idx, idx, -len(seq):] = seq
+
+            # else:
+            #     if padding == 'post':
+            #         x[idx] = trunc + [value for _ in range(maxlen-len(trunc))]
+            #     elif padding == 'pre':
+            #         x[idx] = [value for _ in range(maxlen-len(trunc))] + trunc
+
+
+    return x
+
 
 def process_sequences(sequences, end_id=0, pad_val=0, is_shorten=True, remain_end_id=False):
     """Set all tokens(ids) after END token to the padding value, and then shorten (option) it to the maximum sequence length in this batch.
@@ -1344,6 +1472,36 @@ def sequences_add_start_id(sequences, start_id=0, remove_last=False):
         else:
             sequences_out[i] = [start_id] + sequences[i]
     return sequences_out
+
+
+def sequences_add_start_3d(sequences, start=0, remove_last=False):
+    """Add special start token(id) in the beginning of each sequence.
+
+    Examples
+    ---------
+    >>> sentences_ids = [[4,3,5,3,2,2,2,2], [5,3,9,4,9,2,2,3]]
+    >>> sentences_ids = sequences_add_start_id(sentences_ids, start_id=2)
+    ... [[2, 4, 3, 5, 3, 2, 2, 2, 2], [2, 5, 3, 9, 4, 9, 2, 2, 3]]
+    >>> sentences_ids = sequences_add_start_id(sentences_ids, start_id=2, remove_last=True)
+    ... [[2, 4, 3, 5, 3, 2, 2, 2], [2, 5, 3, 9, 4, 9, 2, 2]]
+
+    - For Seq2seq
+    >>> input = [a, b, c]
+    >>> target = [x, y, z]
+    >>> decode_seq = [start_id, a, b] <-- sequences_add_start_id(input, start_id, True)
+    """
+    # sequences_out = [[] for _ in range(len(sequences))]#[[]] * len(sequences)
+    sequences_out=sequences.copy()
+    for i, sequence in enumerate(sequences):
+        for j in range(len(sequence)):
+            sequences_out[i][j].insert(0, start)
+            if remove_last:
+                del sequences_out[i][j][-1]
+                # sequences_out[i][j] = [start_id] + sequences[i][:-1]
+            # else:
+            #     sequences_out[i][j].insert(0, start)# = [start_id] + sequences[i]
+    return sequences_out
+
 
 def sequences_get_mask(sequences, pad_val=0):
     """Return mask for sequences.

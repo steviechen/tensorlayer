@@ -247,17 +247,160 @@ def cross_entropy_seq_with_mask(logits, target_seqs, input_mask, return_details=
     """
     targets = tf.reshape(target_seqs, [-1])   # to one vector
     weights = tf.to_float(tf.reshape(input_mask, [-1]))   # to one vector like targets
-    losses = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=targets, name=name) * weights
+    losses = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=targets, name=name)
     #losses = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=targets, name=name)) # for TF1.0 and others
 
     try: ## TF1.0
-        loss = tf.divide(tf.reduce_sum(losses),   # loss from mask. reduce_sum before element-wise mul with mask !!
-                        tf.reduce_sum(weights),
-                        name="seq_loss_with_mask")
+        loss = tf.losses.compute_weighted_loss(losses=losses, weights=weights)
+        # loss = tf.divide(tf.reduce_sum(losses),   # loss from mask. reduce_sum before element-wise mul with mask !!
+        #                  tf.reduce_sum(weights),
+        #                  name=name)
     except: ## TF0.12
-        loss = tf.div(tf.reduce_sum(losses),   # loss from mask. reduce_sum before element-wise mul with mask !!
-                        tf.reduce_sum(weights),
-                        name="seq_loss_with_mask")
+        loss = tf.div(tf.reduce_sum(losses * weights),   # loss from mask. reduce_sum before element-wise mul with mask !!
+                      tf.reduce_sum(weights),
+                      name=name)
+    if return_details:
+        return loss, losses, weights, targets
+    else:
+        return loss
+
+
+def tanh_cross_entropy_with_logits(labels=None, logits=None,
+                                   name=None):
+    """Computes sigmoid cross entropy given `logits`.
+
+    Measures the probability error in discrete classification tasks in which each
+    class is independent and not mutually exclusive.  For instance, one could
+    perform multilabel classification where a picture can contain both an elephant
+    and a dog at the same time.
+
+    For brevity, let `x = logits`, `z = targets`.  The logistic loss is
+
+          z * -log(sigmoid(x)) + (1 - z) * -log(1 - sigmoid(x))
+        = z * -log(1 / (1 + exp(-x))) + (1 - z) * -log(exp(-x) / (1 + exp(-x)))
+        = z * log(1 + exp(-x)) + (1 - z) * (-log(exp(-x)) + log(1 + exp(-x)))
+        = z * log(1 + exp(-x)) + (1 - z) * (x + log(1 + exp(-x))
+        = (1 - z) * x + log(1 + exp(-x))
+        = x - x * z + log(1 + exp(-x))
+
+    To ensure stability and avoid overflow, the implementation uses
+
+        max(x, 0) - x * z + log(1 + exp(-abs(x)))
+
+    `logits` and `targets` must have the same type and shape.
+
+    Args:
+      logits: A `Tensor` of type `float32` or `float64`.
+      targets: A `Tensor` of the same type and shape as `logits`.
+      name: A name for the operation (optional).
+
+    Returns:
+      A `Tensor` of the same shape as `logits` with the componentwise
+      logistic losses.
+    """
+
+    with ops.name_scope(name, "tanh_logistic_loss", [logits, labels]) as name:
+        logits = ops.convert_to_tensor(logits, name="logits")
+        labels = ops.convert_to_tensor(labels, name="labels")
+        try:
+            labels.get_shape().merge_with(logits.get_shape())
+        except ValueError:
+            raise ValueError("logits and labels must have the same shape (%s vs %s)"
+                             % (logits.get_shape(), labels.get_shape()))
+
+        log2 = math_ops.log(2.0)
+        logits_x2 = logits * 2.0
+        log_1_plus_activation = log2 - math_ops.log1p(math_ops.exp(-logits_x2))
+        log_1_minus_activation = log2 - math_ops.log1p(math_ops.exp(logits_x2))
+
+        #return -0.5 * ((1 + labels) * log_1_plus_activation + (1 - labels) * log_1_minus_activation) + 0.7
+        return math_ops.add(-0.5 * ((1 + labels) * log_1_plus_activation + (1 - labels) * log_1_minus_activation), 0.7, name=name)
+
+
+def tanh_cross_entropy_seq_with_mask(logits, target_seqs, input_mask, return_details=False, name=None):
+    """Returns the expression of cross-entropy of two sequences, implement
+    softmax internally. Normally be used for Dynamic RNN outputs.
+
+    Parameters
+    -----------
+    logits : network identity outputs
+        2D tensor, ``network.outputs``, [batch_size, number of output units].
+    target_seqs : int of tensor, like word ID.
+        [batch_size, ?]
+    input_mask : the mask to compute loss
+        The same size with target_seqs, normally 0 and 1.
+    return_details : boolean
+        - If False (default), only returns the loss.
+        - If True, returns the loss, losses, weights and targets (reshape to one vetcor).
+
+    Examples
+    --------
+    - see Image Captioning Example.
+    """
+    weights = tf.to_float(tf.reshape(input_mask, [-1]))  # to one vector like targets
+    if target_seqs.get_shape().ndims > 2:
+        targets = tf.reshape(target_seqs, [-1, int(target_seqs.get_shape()[-1])])  # to one vector
+        weights = tf.expand_dims(weights, 1)
+    else:
+        targets = tf.reshape(target_seqs, [-1])  # to one vector
+    # losses = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=targets, name=name) * weights
+    losses = tanh_cross_entropy_with_logits(labels=targets, logits=logits, name=name)
+    # losses = tf.reduce_mean(tanh_cross_entropy_with_logits(logits=logits, labels=targets, name='xentropy'))  # for TF1.0 and others
+
+    try:  ## TF1.0
+        loss = tf.losses.compute_weighted_loss(losses=losses, weights=weights)
+        # loss = tf.reduce_sum(tf.divide(tf.reduce_sum(losses, axis=0),
+        #                                # loss from mask. reduce_sum before element-wise mul with mask !!
+        #                                tf.reduce_sum(weights)), name=name)
+    except:  ## TF0.12
+        loss = tf.reduce_sum(tf.div(tf.reduce_sum(losses* weights, axis=0),  # loss from mask. reduce_sum before element-wise mul with mask !!
+                                    tf.reduce_sum(weights)), name=name)
+
+    if return_details:
+        return loss, losses, weights, targets
+    else:
+        return loss
+
+
+def l2_loss_seq_with_mask(outputs, target_seqs, input_mask, return_details=False, name=None):
+    """Returns the expression of cross-entropy of two sequences, implement
+    softmax internally. Normally be used for Dynamic RNN outputs.
+
+    Parameters
+    -----------
+    logits : network identity outputs
+        2D tensor, ``network.outputs``, [batch_size, number of output units].
+    target_seqs : int of tensor, like word ID.
+        [batch_size, ?]
+    input_mask : the mask to compute loss
+        The same size with target_seqs, normally 0 and 1.
+    return_details : boolean
+        - If False (default), only returns the loss.
+        - If True, returns the loss, losses, weights and targets (reshape to one vetcor).
+
+    Examples
+    --------
+    - see Image Captioning Example.
+    """
+    weights = tf.to_float(tf.reshape(input_mask, [-1]))  # to one vector like targets
+    if target_seqs.get_shape().ndims > 2:
+        targets = tf.reshape(target_seqs, [-1, int(target_seqs.get_shape()[-1])])  # to one vector
+        weights = tf.expand_dims(weights, 1)
+    else:
+        targets = tf.reshape(target_seqs, [-1])  # to one vector
+
+    #losses=tf.squared_difference(outputs, targets, name="squared_error") * weights
+    losses = tf.squared_difference(outputs, targets, name=name)
+
+    try:  ## TF1.0
+        loss = tf.losses.compute_weighted_loss(losses=losses, weights=weights)
+        # loss = tf.reduce_sum(tf.divide(tf.reduce_sum(losses * weights, axis=0),
+        #                                # loss from mask. reduce_sum before element-wise mul with mask !!
+        #                                tf.reduce_sum(weights)), name=name)
+    except:  ## TF0.12
+        loss = tf.reduce_sum(tf.div(tf.reduce_sum(losses * weights, axis=0),  # loss from mask. reduce_sum before element-wise mul with mask !!
+                                    tf.reduce_sum(weights)), name=name)
+
     if return_details:
         return loss, losses, weights, targets
     else:
