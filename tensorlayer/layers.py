@@ -259,6 +259,7 @@ class Layer(object):
         name ='layer'
     ):
         self.inputs = inputs
+        name = tf.get_variable_scope().name + "/" + name
         if (name in set_keep['_layers_name_list']) and name_reuse == False:
             raise Exception("Layer '%s' already exists, please choice other 'name' or reuse this layer\
             \nHint : Use different name for different 'Layer' (The name is used to control parameter sharing)" % name)
@@ -315,26 +316,56 @@ class InputLayer(Layer):
 
     Parameters
     ----------
-    inputs : a TensorFlow placeholder
+    inputs : a placeholder or tensor
         The input tensor data.
     name : a string or None
         An optional name to attach to this layer.
-    n_features : a int
-        The number of features. If not specify, it will assume the input is
-        with the shape of [batch_size, n_features], then select the second
-        element as the n_features. It is used to specify the matrix size of
-        next layer. If apply Convolutional layer after InputLayer,
-        n_features is not important.
     """
     def __init__(
         self,
         inputs = None,
-        n_features = None,
         name ='input_layer'
     ):
         Layer.__init__(self, inputs=inputs, name=name)
         print("  [TL] InputLayer  %s: %s" % (self.name, inputs.get_shape()))
         self.outputs = inputs
+        self.all_layers = []
+        self.all_params = []
+        self.all_drop = {}
+
+## OneHot layer
+class OneHotInputLayer(Layer):
+    """
+    The :class:`OneHotInputLayer` class is the starting layer of a neural network, see ``tf.one_hot``.
+
+    Parameters
+    ----------
+    inputs : a placeholder or tensor
+        The input tensor data.
+    name : a string or None
+        An optional name to attach to this layer.
+    depth : If the input indices is rank N, the output will have rank N+1. The new axis is created at dimension axis (default: the new axis is appended at the end).
+    on_value : If on_value is not provided, it will default to the value 1 with type dtype.
+        default, None
+    off_value : If off_value is not provided, it will default to the value 0 with type dtype.
+        default, None
+    axis : default, None
+    dtype : default, None
+    """
+    def __init__(
+        self,
+        inputs = None,
+        depth = None,
+        on_value = None,
+        off_value = None,
+        axis = None,
+        dtype=None,
+        name ='input_layer'
+    ):
+        Layer.__init__(self, inputs=inputs, name=name)
+        assert depth != None, "depth is not given"
+        print("  [TL]:Instantiate OneHotInputLayer  %s: %s" % (self.name, inputs.get_shape()))
+        self.outputs = tf.one_hot(inputs, depth, on_value=on_value, off_value=off_value, axis=axis, dtype=dtype)
         self.all_layers = []
         self.all_params = []
         self.all_drop = {}
@@ -1083,7 +1114,7 @@ class Conv1dLayer(Layer):
     act : activation function, None for identity.
     shape : list of shape
         shape of the filters, [filter_length, in_channels, out_channels].
-    strides : an int.
+    stride : an int.
         The number of entries by which the filter is moved right at each step.
     padding : a string from: "SAME", "VALID".
         The type of padding algorithm to use.
@@ -1104,8 +1135,8 @@ class Conv1dLayer(Layer):
         self,
         layer = None,
         act = tf.identity,
-        shape = [5, 5, 1],
-        strides= 1,
+        shape = [5, 1, 5],
+        stride = 1,
         padding='SAME',
         use_cudnn_on_gpu=None,
         data_format=None,
@@ -1117,18 +1148,18 @@ class Conv1dLayer(Layer):
     ):
         Layer.__init__(self, name=name)
         self.inputs = layer.outputs
-        print("  [TL] Conv1dLayer %s: shape:%s strides:%s pad:%s act:%s" %
-                            (self.name, str(shape), str(strides), padding, act.__name__))
+        print("  [TL] Conv1dLayer %s: shape:%s stride:%s pad:%s act:%s" %
+                            (self.name, str(shape), str(stride), padding, act.__name__))
         if act is None:
             act = tf.identity
         with tf.variable_scope(name) as vs:
             W = tf.get_variable(name='W_conv1d', shape=shape, initializer=W_init, **W_init_args )
             if b_init:
                 b = tf.get_variable(name='b_conv1d', shape=(shape[-1]), initializer=b_init, **b_init_args )
-                self.outputs = act( tf.nn.conv1d(self.inputs, W, stride=strides, padding=padding,
+                self.outputs = act( tf.nn.conv1d(self.inputs, W, stride=stride, padding=padding,
                             use_cudnn_on_gpu=use_cudnn_on_gpu, data_format=data_format) + b ) #1.2
             else:
-                self.outputs = act( tf.nn.conv1d(self.inputs, W, strides=strides, padding=padding,
+                self.outputs = act( tf.nn.conv1d(self.inputs, W, stride=stride, padding=padding,
                             use_cudnn_on_gpu=use_cudnn_on_gpu, data_format=data_format))
 
         self.all_layers = list(layer.all_layers)
@@ -1761,6 +1792,39 @@ def deconv2d_bilinear_upsampling_initializer(shape):
     return bilinear_weights_init
 
 ## Convolutional layer (Simplified)
+def Conv1d(net, n_filter=32, filter_size=5, stride=1, act=None,
+        padding='SAME', use_cudnn_on_gpu=None,data_format=None,
+        W_init = tf.truncated_normal_initializer(stddev=0.02),
+        b_init = tf.constant_initializer(value=0.0),
+        W_init_args = {}, b_init_args = {}, name ='conv1d',):
+    """Wrapper for :class:`Conv1dLayer`, if you don't understand how to use :class:`Conv1dLayer`, this function may be easier.
+
+    Parameters
+    ----------
+    net : TensorLayer layer.
+    n_filter : number of filter.
+    filter_size : an int.
+    stride : an int.
+    act : None or activation function.
+    others : see :class:`Conv1dLayer`.
+    """
+    if act is None:
+        act = tf.identity
+    net = Conv1dLayer(layer = net,
+            act = act,
+            shape = [filter_size, int(net.outputs.get_shape()[-1]), n_filter],
+            stride = stride,
+            padding = padding,
+            use_cudnn_on_gpu = use_cudnn_on_gpu,
+            data_format = data_format,
+            W_init = W_init,
+            b_init = b_init,
+            W_init_args = W_init_args,
+            b_init_args = b_init_args,
+            name = name,
+        )
+    return net
+
 def Conv2d(net, n_filter=32, filter_size=(3, 3), strides=(1, 1), act = None,
         padding='SAME', W_init = tf.truncated_normal_initializer(stddev=0.02), b_init = tf.constant_initializer(value=0.0),
         W_init_args = {}, b_init_args = {}, name ='conv2d',):
@@ -4142,8 +4206,8 @@ class Seq2Seq(Layer):
         The number of RNN layers.
     return_seq_2d : boolean
         - When return_last = False
-        - If True, return 2D Tensor [n_example, 2 * n_hidden], for stacking DenseLayer or computing cost after it.
-        - If False, return 3D Tensor [n_example/n_steps(max), n_steps(max), 2 * n_hidden], for stacking multiple RNN after it.
+        - If True, return 2D Tensor [n_example, n_hidden], for stacking DenseLayer or computing cost after it.
+        - If False, return 3D Tensor [n_example/n_steps(max), n_steps(max), n_hidden], for stacking multiple RNN after it.
     name : a string or None
         An optional name to attach to this layer.
 
@@ -4762,6 +4826,43 @@ class KerasLayer(Layer):
         print("  [TL] KerasLayer %s: %s" % (self.name, keras_layer))
         with tf.variable_scope(name) as vs:
             self.outputs = keras_layer(self.inputs, **keras_args)
+            variables = tf.get_collection(TF_GRAPHKEYS_VARIABLES, scope=vs.name)
+        self.all_layers = list(layer.all_layers)
+        self.all_params = list(layer.all_params)
+        self.all_drop = dict(layer.all_drop)
+        self.all_layers.extend( [self.outputs] )
+        self.all_params.extend( variables )
+
+## Estimator layer
+class EstimatorLayer(Layer):
+    """
+    The :class:`EstimatorLayer` class accepts ``model_fn`` that described the model.
+    It is similar with :class:`KerasLayer`, see `tutorial_keras.py <https://github.com/zsdonghao/tensorlayer/blob/master/example/tutorial_keras.py>`_
+
+    Parameters
+    ----------
+    layer : a :class:`Layer` instance
+        The `Layer` class feeding into this layer.
+    model_fn : a function that described the model.
+    args : dictionary
+        The arguments for the model_fn.
+    name : a string or None
+        An optional name to attach to this layer.
+    """
+    def __init__(
+        self,
+        layer = None,
+        model_fn = None,
+        args = {},
+        name ='estimator_layer',
+    ):
+        Layer.__init__(self, name=name)
+        assert layer is not None
+        assert model_fn is not None
+        self.inputs = layer.outputs
+        print("  [TL] EstimatorLayer %s: %s" % (self.name, model_fn))
+        with tf.variable_scope(name) as vs:
+            self.outputs = model_fn(self.inputs, **args)
             variables = tf.get_collection(TF_GRAPHKEYS_VARIABLES, scope=vs.name)
         self.all_layers = list(layer.all_layers)
         self.all_params = list(layer.all_params)
