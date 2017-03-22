@@ -3756,7 +3756,8 @@ class DynamicRNNLayer(Layer):
         self.batch_size = batch_size
 
         # Creats the cell function
-        self.cell = cell_fn(num_units=n_hidden, **cell_init_args)
+        cell_instance_fn=lambda: cell_fn(num_units=n_hidden, **cell_init_args)
+        # self.cell = cell_fn(num_units=n_hidden, **cell_init_args)
 
         # Apply dropout
         if dropout:
@@ -3773,10 +3774,15 @@ class DynamicRNNLayer(Layer):
             except:
                 DropoutWrapper_fn = tf.nn.rnn_cell.DropoutWrapper
 
-            self.cell = DropoutWrapper_fn(
-                      self.cell,
-                      input_keep_prob=in_keep_prob,
-                      output_keep_prob=out_keep_prob)
+            cell_instance_fn1=cell_instance_fn
+            cell_instance_fn=DropoutWrapper_fn(
+                                cell_instance_fn1(),
+                                input_keep_prob=in_keep_prob,
+                                output_keep_prob=out_keep_prob)
+            # self.cell = DropoutWrapper_fn(
+            #           self.cell,
+            #           input_keep_prob=in_keep_prob,
+            #           output_keep_prob=out_keep_prob)
         # Apply multiple layers
         if n_layer > 1:
             try:
@@ -3784,11 +3790,15 @@ class DynamicRNNLayer(Layer):
             except:
                 MultiRNNCell_fn = tf.nn.rnn_cell.MultiRNNCell
 
+            cell_instance_fn2=cell_instance_fn
             try:
-                self.cell = MultiRNNCell_fn([self.cell] * n_layer, state_is_tuple=True)
+                cell_instance_fn=lambda: MultiRNNCell_fn([cell_instance_fn2() for _ in range(n_layer)], state_is_tuple=True)
+                # self.cell = MultiRNNCell_fn([self.cell] * n_layer, state_is_tuple=True)
             except:
-                self.cell = MultiRNNCell_fn([self.cell] * n_layer)
+                cell_instance_fn=lambda: MultiRNNCell_fn([cell_instance_fn2() for _ in range(n_layer)])
+                # self.cell = MultiRNNCell_fn([self.cell] * n_layer)
 
+        self.cell=cell_instance_fn()
         # Initialize initial_state
         if initial_state is None:
             self.initial_state = self.cell.zero_state(batch_size, dtype=tf.float32)#dtype="float")
@@ -3983,8 +3993,9 @@ class BiDynamicRNNLayer(Layer):
 
         with tf.variable_scope(name, initializer=initializer) as vs:
             # Creats the cell function
-            self.fw_cell = cell_fn(num_units=n_hidden, **cell_init_args)
-            self.bw_cell = cell_fn(num_units=n_hidden, **cell_init_args)
+            cell_instance_fn=lambda: cell_fn(num_units=n_hidden, **cell_init_args)
+            # self.fw_cell = cell_fn(num_units=n_hidden, **cell_init_args)
+            # self.bw_cell = cell_fn(num_units=n_hidden, **cell_init_args)
 
             # Apply dropout
             if dropout:
@@ -4001,14 +4012,20 @@ class BiDynamicRNNLayer(Layer):
                 except:
                     DropoutWrapper_fn = tf.nn.rnn_cell.DropoutWrapper
 
-                self.fw_cell = DropoutWrapper_fn(
-                    self.fw_cell,
-                    input_keep_prob=in_keep_prob,
-                    output_keep_prob=out_keep_prob)
-                self.bw_cell = DropoutWrapper_fn(
-                    self.bw_cell,
-                    input_keep_prob=in_keep_prob,
-                    output_keep_prob=out_keep_prob)
+                    cell_instance_fn1=cell_instance_fn
+                    cell_instance_fn=lambda: DropoutWrapper_fn(
+                                        cell_instance_fn1(),
+                                        input_keep_prob=in_keep_prob,
+                                        output_keep_prob=out_keep_prob)
+
+                # self.fw_cell = DropoutWrapper_fn(
+                #     self.fw_cell,
+                #     input_keep_prob=in_keep_prob,
+                #     output_keep_prob=out_keep_prob)
+                # self.bw_cell = DropoutWrapper_fn(
+                #     self.bw_cell,
+                #     input_keep_prob=in_keep_prob,
+                #     output_keep_prob=out_keep_prob)
             # Apply multiple layers
             if n_layer > 1:
                 try:
@@ -4016,8 +4033,12 @@ class BiDynamicRNNLayer(Layer):
                 except:
                     MultiRNNCell_fn = tf.nn.rnn_cell.MultiRNNCell
 
-                self.fw_cell = MultiRNNCell_fn([self.fw_cell] * n_layer)
-                self.bw_cell = MultiRNNCell_fn([self.bw_cell] * n_layer)
+                cell_instance_fn2=cell_instance_fn
+                cell_instance_fn=lambda: MultiRNNCell_fn([cell_instance_fn2() for _ in range(n_layer)])
+                # self.fw_cell = MultiRNNCell_fn([self.fw_cell] * n_layer)
+                # self.bw_cell = MultiRNNCell_fn([self.bw_cell] * n_layer)
+            self.fw_cell=cell_instance_fn()
+            self.bw_cell=cell_instance_fn()
             # Initial state of RNN
             if fw_initial_state is None:
                 self.fw_initial_state = self.fw_cell.zero_state(self.batch_size, dtype=tf.float32)
