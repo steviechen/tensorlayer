@@ -1328,6 +1328,11 @@ def pad_sequences_3d(sequences, maxlen1=None, maxlen2=None, dtype='int32', paddi
     if truncating not in ('pre', 'post', 'ordered_random', 'random'):
         raise ValueError('Truncating type "%s" not understood' % truncating)
 
+    if maxlen1 is not None and maxlen1<=0:
+        maxlen1=None
+    if maxlen2 is not None and maxlen2<=0:
+        maxlen2=None
+
     if maxlen1 is None and maxlen2 is None:
         truncating='none'
 
