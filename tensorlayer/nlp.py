@@ -589,7 +589,12 @@ def build_words_dataset(words=[], vocabulary_size=50000, printable=True, unk_key
     """
     import collections
     count = initial_count+[[unk_key, -1]]
-    count.extend(collections.Counter(words).most_common(vocabulary_size - len(count)))
+    if not vocabulary_size:
+        num_special_words=len(count)
+        count.extend(collections.Counter(words).most_common())
+        vocabulary_size=len(count)-num_special_words
+    else:
+        count.extend(collections.Counter(words).most_common(vocabulary_size - len(count)))
     dictionary = dict()
     for word, _ in count:
         dictionary[word] = len(dictionary)
