@@ -29,6 +29,7 @@ import scipy.ndimage as ndi
 from skimage import transform
 from skimage import exposure
 import skimage
+import copy
 
 # linalg https://docs.scipy.org/doc/scipy/reference/linalg.html
 # ndimage https://docs.scipy.org/doc/scipy/reference/ndimage.html
@@ -1470,12 +1471,16 @@ def sequences_add_start_id(sequences, start_id=0, remove_last=False):
     >>> target = [x, y, z]
     >>> decode_seq = [start_id, a, b] <-- sequences_add_start_id(input, start_id, True)
     """
-    sequences_out = [[] for _ in range(len(sequences))]#[[]] * len(sequences)
+    # sequences_out = [[] for _ in range(len(sequences))]#[[]] * len(sequences)
+    sequences_out=copy.deepcopy(sequences)
     for i in range(len(sequences)):
+        sequences_out[i].insert(0, start_id)
         if remove_last:
-            sequences_out[i] = [start_id] + sequences[i][:-1]
-        else:
-            sequences_out[i] = [start_id] + sequences[i]
+            del sequences_out[i][-1]
+        # if remove_last:
+        #     sequences_out[i] = [start_id] + sequences[i][:-1]
+        # else:
+        #     sequences_out[i] = [start_id] + sequences[i]
     return sequences_out
 
 
@@ -1496,7 +1501,7 @@ def sequences_add_start_3d(sequences, start=0, remove_last=False):
     >>> decode_seq = [start_id, a, b] <-- sequences_add_start_id(input, start_id, True)
     """
     # sequences_out = [[] for _ in range(len(sequences))]#[[]] * len(sequences)
-    sequences_out=sequences.copy()
+    sequences_out=copy.deepcopy(sequences)
     for i, sequence in enumerate(sequences):
         for j in range(len(sequence)):
             sequences_out[i][j].insert(0, start)
