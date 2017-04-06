@@ -1246,8 +1246,10 @@ def pad_sequences(sequences, maxlen=None, dtype='int32', padding='post', truncat
 
     nb_samples = len(sequences)
     if maxlen is None:
-        maxlen = np.max(lengths)
+        maxlen = np.max(lengths) if lengths else 0
 
+    if maxlen==0:
+        return np.full(shape=(nb_samples, 1), fill_value=value).astype(dtype)#np.empty(shape=(nb_samples, 0, 0)).astype(dtype)
     # take the sample shape from the first non empty sequence
     # checking for consistency in the main loop below.
     sample_shape = tuple()
@@ -1342,10 +1344,14 @@ def pad_sequences_3d(sequences, maxlen1=None, maxlen2=None, dtype='int32', paddi
 
     nb_samples = len(sequences)
     if maxlen1 is None:
-        maxlen1 = np.max([len(sub_seq) for sub_seq in sequences])
+        len_list=[len(sub_seq) for sub_seq in sequences]
+        maxlen1 = np.max(len_list) if len_list else 0
     if maxlen2 is None:
-        maxlen2 = np.max([len(seq) for sub_seq in sequences for seq in sub_seq])
+        len_list=[len(seq) for sub_seq in sequences for seq in sub_seq]
+        maxlen2 = np.max(len_list) if len_list else 0
 
+    if maxlen1==0 or maxlen2==0:
+        return np.full(shape=(nb_samples, 1, 1), fill_value=value).astype(dtype)#np.empty(shape=(nb_samples, 0, 0)).astype(dtype)
     # take the sample shape from the first non empty sequence
     # checking for consistency in the main loop below.
     sample_shape = tuple()

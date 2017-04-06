@@ -87,7 +87,7 @@ def mean_squared_error(output, target):
         A distribution with shape: [batch_size, n_feature].
     """
     with tf.name_scope("mean_squared_error_loss"):
-        mse = tf.reduce_mean(tf.reduce_sum(tf.squared_difference(output, target), 1))
+        mse = tf.reduce_mean(tf.reduce_mean(tf.squared_difference(output, target), 0))
         return mse
 
 
