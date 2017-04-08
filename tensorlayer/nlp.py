@@ -546,7 +546,7 @@ def build_reverse_dictionary(word_to_id):
     return reverse_dictionary
 
 def build_words_dataset(words=[], vocabulary_size=50000, printable=True, unk_key = '<UNK>',
-                        initial_count=[]):
+                        initial_count=[], exclude_rare_words=False):
     """Build the words dictionary and replace rare words with 'UNK' token.
     The most common word has the smallest integer id.
 
@@ -596,8 +596,9 @@ def build_words_dataset(words=[], vocabulary_size=50000, printable=True, unk_key
     else:
         count.extend(collections.Counter(words).most_common(vocabulary_size - len(count)))
     dictionary = dict()
-    for word, _ in count:
-        dictionary[word] = len(dictionary)
+    for i, (word, cnt) in enumerate(count):
+        if not exclude_rare_words or cnt>1 or i<len(initial_count)+1:
+            dictionary[word] = len(dictionary)
     data = list()
     unk_count = 0
     for word in words:
