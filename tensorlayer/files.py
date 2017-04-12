@@ -9,6 +9,7 @@ import re
 import sys
 import tarfile
 import gzip
+import bz2
 import zipfile
 from . import visualize
 from . import nlp
@@ -677,6 +678,19 @@ def save_any_to_npy(save_dict={}, name='file.npy'):
     """
     np.save(name, save_dict)
 
+def save_any_to_npy_bz2(save_dict={}, name='file.npy.bz2'):
+    """Save variables to .npy.bz2 file.
+
+    Examples
+    ---------
+    >>> tl.files.save_any_to_npy_bz2(save_dict={'data': ['a','b']}, name='test.npy.bz2')
+    >>> data = tl.files.load_npy_bz2_to_any(name='test.npy.bz2')
+    >>> print(data)
+    ... {'data': ['a','b']}
+    """
+    with bz2.BZ2File(name, 'w') as f:
+        np.save(f, save_dict)
+
 def load_npy_to_any(path='', name='file.npy'):
     """Load .npy file.
 
@@ -696,6 +710,25 @@ def load_npy_to_any(path='', name='file.npy'):
             print("[!] Fail to load %s" % file_path)
             exit()
 
+def load_npy_bz2_to_any(path='', name='file.npy.bz2'):
+    """Load .npy.bz2 file.
+
+    Examples
+    ---------
+    - see save_any_to_npy_bz2()
+    """
+    file_path = os.path.join(path, name)
+    with bz2.BZ2File(file_path, 'r') as f:
+        try:
+            npy = np.load(f).item()
+        except:
+            npy = np.load(f)
+        finally:
+            try:
+                return npy
+            except:
+                print("[!] Fail to load %s" % file_path)
+                exit()
 
 # Visualizing npz files
 def npz_to_W_pdf(path=None, regx='w1pre_[0-9]+\.(npz)'):
