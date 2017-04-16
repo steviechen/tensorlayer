@@ -1327,17 +1327,26 @@ def pad_sequences_3d(sequences, maxlen1=None, maxlen2=None, dtype='int32', paddi
     ...  [3 3 0 0 0]]
     """
     #lengths = [len(s) for s in sequences]
+    if isinstance(truncating, (list, tuple)):
+        truncating1=truncating[0]
+        truncating2=truncating[1]
+    else:
+        truncating1=truncating2=truncating
 
-    if truncating not in ('pre', 'post', 'ordered_random', 'random'):
-        raise ValueError('Truncating type "%s" not understood' % truncating)
+    if truncating1 not in ('pre', 'post', 'ordered_random', 'random'):
+        raise ValueError('truncating1 type "%s" not understood' % truncating1)
+    if truncating2 not in ('pre', 'post', 'ordered_random', 'random'):
+        raise ValueError('truncating2 type "%s" not understood' % truncating2)
 
     if maxlen1 is not None and maxlen1<=0:
         maxlen1=None
     if maxlen2 is not None and maxlen2<=0:
         maxlen2=None
 
-    if maxlen1 is None and maxlen2 is None:
-        truncating='none'
+    if maxlen1 is None:
+        truncating1='none'
+    if maxlen2 is None:
+        truncating2='none'
 
     if padding not in ('pre', 'post'):
         raise ValueError('Padding type "%s" not understood' % padding)
@@ -1371,13 +1380,13 @@ def pad_sequences_3d(sequences, maxlen1=None, maxlen2=None, dtype='int32', paddi
         if sub_seq_len == 0:
             continue  # empty list was found
         elif sub_seq_len>maxlen1:
-            if truncating == 'pre':
+            if truncating1 == 'pre':
                 sub_seq = sub_seq[-maxlen1:]
-            elif truncating == 'post':
+            elif truncating1 == 'post':
                 sub_seq = sub_seq[:maxlen1]
-            elif truncating == 'ordered_random':
+            elif truncating1 == 'ordered_random':
                 sub_seq = [sub_seq[i] for i in sorted(random.sample(range(sub_seq_len), maxlen1))]
-            elif truncating == 'random':
+            elif truncating1 == 'random':
                 sub_seq=sub_seq.copy()
                 random.shuffle(sub_seq)
                 sub_seq = sub_seq[:maxlen1]
@@ -1387,19 +1396,17 @@ def pad_sequences_3d(sequences, maxlen1=None, maxlen2=None, dtype='int32', paddi
             if seq_len == 0:
                 continue  # empty list was found
             elif seq_len > maxlen2:
-                if truncating == 'pre':
+                if truncating2 == 'pre':
                     seq = seq[-maxlen2:]
-                elif truncating == 'post':
+                elif truncating2 == 'post':
                     seq = seq[:maxlen2]
-                elif truncating == 'ordered_random':
+                elif truncating2 == 'ordered_random':
                     seq = [seq[i] for i in sorted(random.sample(range(seq_len), maxlen2))]
-                elif truncating == 'random':
+                elif truncating2 == 'random':
                     seq = seq.copy()
                     random.shuffle(seq)
                     seq = seq[:maxlen2]
 
-            # check `trunc` has expected shape
-            #if dtype!='object':
             seq = np.asarray(seq, dtype=dtype)
             if seq.shape[1:] != sample_shape:
                 raise ValueError('Shape of sample %s of sequence at position %s:%s is different from expected shape %s' %
@@ -1415,7 +1422,6 @@ def pad_sequences_3d(sequences, maxlen1=None, maxlen2=None, dtype='int32', paddi
             #         x[idx] = trunc + [value for _ in range(maxlen-len(trunc))]
             #     elif padding == 'pre':
             #         x[idx] = [value for _ in range(maxlen-len(trunc))] + trunc
-
 
     return x
 
