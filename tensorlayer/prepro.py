@@ -1426,7 +1426,7 @@ def pad_sequences_3d(sequences, maxlen1=None, maxlen2=None, dtype='int32', paddi
     return x
 
 
-def pad_sequences_nd(sequences, maxlens=[], dtype='int32', padding='post', truncating='pre', value=0.):
+def pad_sequences_nd(sequences, maxlens=[], dtype='int32', padding='post', truncating='pre', value=0., sample_shape=()):
     """Pads each sequence to the same length:
     the length of the longest sequence.
     If maxlen is provided, any sequence longer
@@ -1462,16 +1462,18 @@ def pad_sequences_nd(sequences, maxlens=[], dtype='int32', padding='post', trunc
     if not isinstance(truncating, (list, tuple)):
         truncating=[truncating for _ in maxlens]
 
-    if not isinstance(padding, (list, tuple)):
-        padding=[padding for _ in maxlens]
+    # if not isinstance(padding, (list, tuple)):
+    #     padding=[padding for _ in maxlens]
 
     for trunc in truncating:
         if trunc not in ('pre', 'post', 'ordered_random', 'random'):
             raise ValueError('Truncating type "%s" not understood' % trunc)
 
-    for pad in padding:
-        if pad not in ('pre', 'post'):
-            raise ValueError('Padding type "%s" not understood' % pad)
+    # for pad in padding:
+    #     if pad not in ('pre', 'post'):
+    #         raise ValueError('Padding type "%s" not understood' % pad)
+    if padding not in ('pre', 'post'):
+        raise ValueError('Padding type "%s" not understood' % padding)
 
     for dim in range(len(maxlens)):
         if maxlens[dim] is not None and maxlens[dim]<=0:
@@ -1480,78 +1482,88 @@ def pad_sequences_nd(sequences, maxlens=[], dtype='int32', padding='post', trunc
         if maxlens[dim] is None:
             truncating[dim]='none'
 
-    #TODO: recursively do this
     nb_samples = len(sequences)
-    if maxlen1 is None:
-        len_list=[len(sub_seq) for sub_seq in sequences]
-        maxlen1 = np.max(len_list) if len_list else 0
-    if maxlen2 is None:
-        len_list=[len(seq) for sub_seq in sequences for seq in sub_seq]
-        maxlen2 = np.max(len_list) if len_list else 0
+    assert nb_samples>0
 
-    if maxlen1==0 or maxlen2==0:
-        return np.full(shape=(nb_samples, 1, 1), fill_value=value).astype(dtype)#np.empty(shape=(nb_samples, 0, 0)).astype(dtype)
+    def get_maxlens(sequence):
+        if not isinstance(sequence, (list, tuple)) or len(sequence)==0:
+            return []
+
+        lens_list = list(map(len, sequence))#[len(sub_seq) for sub_seq in sequence]
+        maxlen=max(lens_list) if lens_list else 0
+        flattened_seq=tl.utils.flatten_list(sequence)#flatten one layer
+        if len(flattened_seq)==0 or not isinstance(flattened_seq[0], (list, tuple)):
+            return [maxlen]
+        else:
+            return [maxlen]+get_maxlens(flattened_seq)
+
+    real_maxlens=get_maxlens(sequences)
+    if 0 in real_maxlens:
+        real_maxlens+=[0]* (len(maxlens)-len(real_maxlens))
+    assert len(maxlens)==len(real_maxlens)
+
+    maxlens=[(real_maxlen if maxlen is None else maxlen) for maxlen, real_maxlen in zip(maxlens, real_maxlens)]
+
+    if 0 in maxlens:
+        return np.full(shape=(nb_samples,) + (1,)*len(maxlens) + sample_shape, fill_value=value).astype(dtype)#np.empty(shape=(nb_samples, 0, 0)).astype(dtype)
     # take the sample shape from the first non empty sequence
     # checking for consistency in the main loop below.
-    sample_shape = tuple()
-    for seq in [seq for sub_seq in sequences for seq in sub_seq]:
+    flattened_seq=sequences
+    for _ in range(len(maxlens)-1):
+        flattened_seq = tl.utils.flatten_list(flattened_seq)
+
+    shape = tuple()
+    for seq in flattened_seq:
         if len(seq) > 0:
-            sample_shape = np.asarray(seq).shape[1:]
+            shape = np.asarray(seq).shape[1:]
             break
 
+    if shape!=sample_shape:
+        raise ValueError('Shape of sequence is different from expected shape %s' % (shape, sample_shape))
+
     if dtype in ('str', 'string'):
-        max_str_len=max([len(s) for sub_seq in sequences for seq in sub_seq for s in seq])
+        flattened_seq = tl.utils.flatten_list(flattened_seq)
+        max_str_len=max([len(s) for s in flattened_seq])
         dtype='<U%d' % max_str_len
 
+    del flattened_seq
+
     #x = (np.ones((nb_samples, maxlen) + sample_shape) * value).astype(dtype)
-    x = np.full(shape=(nb_samples, maxlen1, maxlen2) + sample_shape, fill_value=value).astype(dtype)
-    for sub_seq_idx, sub_seq in enumerate(sequences):
-        sub_seq_len=len(sub_seq)
-        if sub_seq_len == 0:
-            continue  # empty list was found
-        elif sub_seq_len>maxlen1:
-            if truncating1 == 'pre':
-                sub_seq = sub_seq[-maxlen1:]
-            elif truncating1 == 'post':
-                sub_seq = sub_seq[:maxlen1]
-            elif truncating1 == 'ordered_random':
-                sub_seq = [sub_seq[i] for i in sorted(random.sample(range(sub_seq_len), maxlen1))]
-            elif truncating1 == 'random':
-                sub_seq=sub_seq.copy()
-                random.shuffle(sub_seq)
-                sub_seq = sub_seq[:maxlen1]
-
-        for idx, seq in enumerate(sub_seq):
-            seq_len=len(seq)
-            if seq_len == 0:
-                continue  # empty list was found
-            elif seq_len > maxlen2:
-                if truncating2 == 'pre':
-                    seq = seq[-maxlen2:]
-                elif truncating2 == 'post':
-                    seq = seq[:maxlen2]
-                elif truncating2 == 'ordered_random':
-                    seq = [seq[i] for i in sorted(random.sample(range(seq_len), maxlen2))]
-                elif truncating2 == 'random':
-                    seq = seq.copy()
-                    random.shuffle(seq)
-                    seq = seq[:maxlen2]
-
+    x = np.full(shape=(nb_samples,) + tuple(maxlens) + sample_shape, fill_value=value).astype(dtype)
+    def pad_sequence(seq, np_arrary, level):
+        if level==len(maxlens):
             seq = np.asarray(seq, dtype=dtype)
             if seq.shape[1:] != sample_shape:
-                raise ValueError('Shape of sample %s of sequence at position %s:%s is different from expected shape %s' %
-                                 (seq.shape[1:], sub_seq_idx, idx, sample_shape))
+                raise ValueError('Shape of sample %s of sequence at level %s is different from expected shape %s' %
+                                 (seq.shape[1:], level, sample_shape))
 
             if padding == 'post':
-                x[sub_seq_idx, idx, :len(seq)] = seq
+                np_arrary[:len(seq)] = seq
             elif padding == 'pre':
-                x[sub_seq_idx, idx, -len(seq):] = seq
+                np_arrary[-len(seq):] = seq
 
-            # else:
-            #     if padding == 'post':
-            #         x[idx] = trunc + [value for _ in range(maxlen-len(trunc))]
-            #     elif padding == 'pre':
-            #         x[idx] = [value for _ in range(maxlen-len(trunc))] + trunc
+            return
+
+        for sub_seq_idx, sub_seq in enumerate(seq):
+            sub_seq_len = len(sub_seq)
+            if sub_seq_len == 0:
+                continue  # empty list was found
+
+            if sub_seq_len > maxlens[level]:
+                if truncating[level] == 'pre':
+                    sub_seq = sub_seq[-maxlens[level]:]
+                elif truncating[level] == 'post':
+                    sub_seq = sub_seq[:maxlens[level]]
+                elif truncating[level] == 'ordered_random':
+                    sub_seq = [sub_seq[i] for i in sorted(random.sample(range(sub_seq_len), maxlens[level]))]
+                elif truncating[level] == 'random':
+                    sub_seq = sub_seq.copy()
+                    random.shuffle(sub_seq)
+                    sub_seq = sub_seq[:maxlens[level]]
+
+            pad_sequence(sub_seq, np_arrary[sub_seq_idx], level+1)
+
+    pad_sequence(sequences, x, 0)
 
     return x
 
