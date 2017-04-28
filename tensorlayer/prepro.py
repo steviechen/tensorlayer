@@ -1210,7 +1210,7 @@ def array_to_img(x, dim_ordering=(0,1,2), scale=True):
 
 
 ## Sequence
-def pad_sequences(sequences, maxlen=None, dtype='int32', padding='post', truncating='pre', value=0.):
+def pad_sequences(sequences, maxlen=None, dtype=None, padding='post', truncating='pre', value=0):
     """Pads each sequence to the same length:
     the length of the longest sequence.
     If maxlen is provided, any sequence longer
@@ -1247,6 +1247,14 @@ def pad_sequences(sequences, maxlen=None, dtype='int32', padding='post', truncat
     nb_samples = len(sequences)
     if maxlen is None:
         maxlen = np.max(lengths) if lengths else 0
+
+    if dtype is None:
+        if isinstance(value, int):
+            dtype='int32'
+        elif isinstance(value, float):
+            dtype = 'float32'
+        elif isinstance(value, str):
+            dtype = 'str'
 
     if maxlen==0:
         return np.full(shape=(nb_samples, 1), fill_value=value).astype(dtype)#np.empty(shape=(nb_samples, 0, 0)).astype(dtype)
@@ -1426,7 +1434,7 @@ def pad_sequences_3d(sequences, maxlen1=None, maxlen2=None, dtype='int32', paddi
     return x
 
 
-def pad_sequences_nd(sequences, maxlens=[], dtype='int32', padding='post', truncating='pre', value=0., sample_shape=()):
+def pad_sequences_nd(sequences, maxlens=[], dtype=None, padding='post', truncating='pre', value=0, sample_shape=()):
     """Pads each sequence to the same length:
     the length of the longest sequence.
     If maxlen is provided, any sequence longer
@@ -1475,6 +1483,14 @@ def pad_sequences_nd(sequences, maxlens=[], dtype='int32', padding='post', trunc
     if padding not in ('pre', 'post'):
         raise ValueError('Padding type "%s" not understood' % padding)
 
+    if dtype is None:
+        if isinstance(value, int):
+            dtype='int32'
+        elif isinstance(value, float):
+            dtype = 'float32'
+        elif isinstance(value, str):
+            dtype = 'str'
+
     for dim in range(len(maxlens)):
         if maxlens[dim] is not None and maxlens[dim]<=0:
             maxlens[dim]=None
@@ -1498,6 +1514,9 @@ def pad_sequences_nd(sequences, maxlens=[], dtype='int32', padding='post', trunc
             return [maxlen]+get_maxlens(flattened_seq)
 
     real_maxlens=get_maxlens(sequences)
+    if len(maxlens)<len(real_maxlens):
+        maxlens+=[None for _ in range(len(real_maxlens)-len(maxlens))]
+
     if 0 in real_maxlens:
         real_maxlens+=[0]* (len(maxlens)-len(real_maxlens))
     assert len(maxlens)==len(real_maxlens)
@@ -1524,7 +1543,7 @@ def pad_sequences_nd(sequences, maxlens=[], dtype='int32', padding='post', trunc
     if dtype in ('str', 'string'):
         flattened_seq = tl.utils.flatten_list(flattened_seq)
         max_str_len=max([len(s) for s in flattened_seq])
-        dtype='<U%d' % max_str_len
+        dtype='<U%d' % np.maximum(max_str_len, len(value))
 
     del flattened_seq
 

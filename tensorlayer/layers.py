@@ -3675,10 +3675,8 @@ def target_mask_op(data, pad_val=0):
     data_shape_size = data.get_shape().ndims
     if data_shape_size == 3:
         return tf.cast(tf.reduce_any(tf.not_equal(data, pad_val), axis=2), dtype=tf.int32)
-    elif data_shape_size == 2:
+    elif data_shape_size == 2 or data_shape_size == 1:
         return tf.cast(tf.not_equal(data, pad_val), dtype=tf.int32)
-    elif data_shape_size == 1:
-        raise ValueError("target_mask_op: data has wrong shape!")
     else:
         raise ValueError("target_mask_op: handling data_shape_size %s hasn't been implemented!" % (data_shape_size))
 
@@ -4675,9 +4673,40 @@ class StackLayer(Layer):
             self.all_params.extend(list(layer[i].all_params))
             self.all_drop.update(dict(layer[i].all_drop))
 
-        self.all_layers = list_remove_repeat(self.all_layers)
-        self.all_params = list_remove_repeat(self.all_params)
-        #self.all_drop = list_remove_repeat(self.all_drop) # it is a dict
+        self.all_layers.extend( [self.outputs] )
+
+
+class SoftmaxLayer(Layer):
+    """
+    The :class:`SoftmaxLayer` class is layer which outputs integer class given the input logits.
+
+    Parameters
+    ----------
+    layer : a list of :class:`Layer` instances
+        The `Layer` class feeding into this layer.
+    softmax_dim : int
+        Dimension of the probabilistic vector.
+    name : a string or None
+        An optional name to attach to this layer.
+    """
+    def __init__(
+        self,
+        layer = None,
+        softmax_dim = 1,
+        name ='softmax_layer',
+    ):
+        Layer.__init__(self, name=name)
+        self.inputs = layer.outputs
+
+        self.outputs = tf.cast(tf.argmax(tf.nn.softmax(self.inputs), axis=softmax_dim), dtype=tf.int32, name=name)
+
+        print("  [TL] %s %s" % (__class__, self.name))
+
+        self.all_layers = list(layer.all_layers)
+        self.all_params = list(layer.all_params)
+        self.all_drop = dict(layer.all_drop)
+        self.all_layers.extend( [self.outputs] )
+
 
 class ElementwiseLayer(Layer):
     """
