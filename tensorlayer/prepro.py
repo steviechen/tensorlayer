@@ -1549,6 +1549,7 @@ def pad_sequences_nd(sequences, maxlens=[], dtype=None, padding='post', truncati
 
     #x = (np.ones((nb_samples, maxlen) + sample_shape) * value).astype(dtype)
     x = np.full(shape=(nb_samples,) + tuple(maxlens) + sample_shape, fill_value=value).astype(dtype)
+    random_state_stack=[]
     def pad_sequence(seq, np_arrary, level):
         if level==len(maxlens):
             seq = np.asarray(seq, dtype=dtype)
@@ -1574,13 +1575,17 @@ def pad_sequences_nd(sequences, maxlens=[], dtype=None, padding='post', truncati
                 elif truncating[level] == 'post':
                     sub_seq = sub_seq[:maxlens[level]]
                 elif truncating[level] == 'ordered_random':
+                    # print('level:%d' % level)
+                    # print(random.sample(range(sub_seq_len), maxlens[level]))
                     sub_seq = [sub_seq[i] for i in sorted(random.sample(range(sub_seq_len), maxlens[level]))]
                 elif truncating[level] == 'random':
                     sub_seq = sub_seq.copy()
                     random.shuffle(sub_seq)
                     sub_seq = sub_seq[:maxlens[level]]
 
+            random_state_stack.append(random.getstate())#make sure sub level doesn't affect current level's random state
             pad_sequence(sub_seq, np_arrary[sub_seq_idx], level+1)
+            random.setstate(random_state_stack.pop())
 
     pad_sequence(sequences, x, 0)
 
