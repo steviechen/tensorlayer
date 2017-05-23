@@ -312,7 +312,7 @@ def dict_to_one(dp_dict={}):
     >>> dp_dict = dict_to_one( network.all_drop )
     >>> feed_dict.update(dp_dict)
     """
-    return {x: 1 for x in dp_dict}
+    return {x: 1.0 for x in dp_dict}
 
 def flatten_list(list_of_list=[[],[]]):
     """

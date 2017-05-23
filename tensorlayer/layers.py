@@ -957,7 +957,7 @@ class DropoutLayer(Layer):
             if is_fix:
                 self.outputs = tf.nn.dropout(self.inputs, keep, name=name)
             else:
-                set_keep[name] = tf.placeholder(tf.float32)
+                set_keep[name] = tf.placeholder(tf.float32, name=name+'.set_keep')
                 self.outputs = tf.nn.dropout(self.inputs, set_keep[name], name=name) # 1.2
 
             self.all_layers = list(layer.all_layers)
