@@ -5076,8 +5076,9 @@ class MultiplexerLayer(Layer):
     - See ``tf.pack() for TF0.12 or tf.stack() for TF1.0`` and ``tf.gather()`` at `TensorFlow - Slicing and Joining <https://www.tensorflow.org/versions/master/api_docs/python/array_ops.html#slicing-and-joining>`_
     """
     def __init__(self,
-               layer = [],
-               name='mux_layer'):
+                 layer = [],
+                 sel=None,
+                 name='mux_layer'):
         Layer.__init__(self, name=name)
         self.n_inputs = len(layer)
 
@@ -5091,7 +5092,7 @@ class MultiplexerLayer(Layer):
 
         print("  [TL] MultiplexerLayer %s: n_inputs:%d" % (self.name, self.n_inputs))
 
-        self.sel = tf.placeholder(tf.int32)
+        self.sel = sel if sel else tf.placeholder(tf.int32, name=name+'.sel')
         self.outputs = tf.gather(all_inputs, self.sel, name=name) # [sel, :, : ...] # 1.2
 
         # print(self.outputs, vars(self.outputs))
