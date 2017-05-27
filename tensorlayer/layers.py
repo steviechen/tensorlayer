@@ -372,6 +372,31 @@ class OneHotInputLayer(Layer):
         self.all_params = []
         self.all_drop = {}
 
+# one-hot layer
+class OneHotLayer(Layer):
+    def __init__(
+        self,
+        layer=None,
+        depth=None,
+        on_value=None,
+        off_value=None,
+        axis=None,
+        dtype=None,
+        name="one_hot_layer"
+    ):
+        Layer.__init__(self, name=name)
+        self.inputs = layer.outputs
+        print("  [TL] OneHotLayer %s" % (self.name))
+
+        self.outputs = tf.one_hot(self.inputs, depth, on_value=on_value, off_value=off_value, axis=axis, dtype=dtype)
+
+        self.all_layers = list(layer.all_layers)
+        self.all_params = list(layer.all_params)
+        self.all_drop = dict(layer.all_drop)
+
+        self.all_layers.extend([self.outputs])
+
+
 ## Word Embedding Input layer
 class Word2vecEmbeddingInputlayer(Layer):
     """
@@ -5092,7 +5117,7 @@ class MultiplexerLayer(Layer):
 
         print("  [TL] MultiplexerLayer %s: n_inputs:%d" % (self.name, self.n_inputs))
 
-        self.sel = sel if sel else tf.placeholder(tf.int32, name=name+'.sel')
+        self.sel = sel if sel is not None else tf.placeholder(tf.int32, name=name+'.sel')
         self.outputs = tf.gather(all_inputs, self.sel, name=name) # [sel, :, : ...] # 1.2
 
         # print(self.outputs, vars(self.outputs))
@@ -5141,6 +5166,36 @@ class MultiplexerLayer(Layer):
 #            name='demux_layer'):
 #         Layer.__init__(self, name=name)
 #         self.outputs = []
+
+class HashTableLayer(Layer):
+    def __init__(
+        self,
+        layer = None,
+        keys = [],
+        values = [],
+        key_dtype = None,
+        value_dtype = None,
+        default_value = None,
+        name="hash_table_layer"
+    ):
+        Layer.__init__(self, name=name)
+        self.inputs = layer.outputs
+        print("  [TL] HashTableLayer %s: keys:%s values:%s" % (self.name, keys, values))
+
+        self.table = tf.contrib.lookup.HashTable(
+            tf.contrib.lookup.KeyValueTensorInitializer(keys, values,
+                                                        key_dtype = key_dtype, value_dtype = value_dtype,
+                                                        name=name+'.key_value_init'),
+            default_value, name=name+'.table')
+
+        self.outputs = self.table.lookup(tf.cast(self.inputs, self.table.key_dtype), name=name+'.lookup')
+
+        self.all_layers = list(layer.all_layers)
+        self.all_params = list(layer.all_params)
+        self.all_drop = dict(layer.all_drop)
+
+        self.all_layers.extend([self.outputs])
+
 
 ## Wrapper
 class EmbeddingAttentionSeq2seqWrapper(Layer):
