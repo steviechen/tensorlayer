@@ -4723,7 +4723,7 @@ class SoftmaxLayer(Layer):
         Layer.__init__(self, name=name)
         self.inputs = layer.outputs
 
-        self.outputs = tf.cast(tf.argmax(tf.nn.softmax(self.inputs), axis=softmax_dim), dtype=tf.int32, name=name)
+        self.outputs = tf.cast(tf.argmax(tf.nn.softmax(self.inputs, dim=softmax_dim), axis=softmax_dim), dtype=tf.int32, name=name)
 
         print("  [TL] %s %s" % (__class__, self.name))
 

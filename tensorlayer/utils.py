@@ -266,7 +266,7 @@ def predict(sess, network, X, x, y_op):
     return sess.run(y_op, feed_dict=feed_dict)
 
 ## Evaluation
-def evaluation(y_test=None, y_predict=None, n_classes=None):
+def evaluation(y_test=None, y_predict=None, n_classes=None, printable=True):
     """
     Input the predicted results, targets results and
     the number of class, return the confusion matrix, F1-score of each class,
@@ -290,10 +290,11 @@ def evaluation(y_test=None, y_predict=None, n_classes=None):
     f1    = f1_score(y_test, y_predict, average = None, labels = [x for x in range(n_classes)])
     f1_macro = f1_score(y_test, y_predict, average='macro')
     acc   = accuracy_score(y_test, y_predict)
-    print('confusion matrix: \n',c_mat)
-    print('f1-score:',f1)
-    print('f1-score(macro):',f1_macro)   # same output with > f1_score(y_true, y_pred, average='macro')
-    print('accuracy-score:', acc)
+    if printable:
+        print('confusion matrix: \n',c_mat)
+        print('f1-score:',f1)
+        print('f1-score(macro):',f1_macro)   # same output with > f1_score(y_true, y_pred, average='macro')
+        print('accuracy-score:', acc)
     return c_mat, f1, acc, f1_macro
 
 def dict_to_one(dp_dict={}):

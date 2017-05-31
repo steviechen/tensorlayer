@@ -1521,7 +1521,7 @@ def pad_sequences_nd(sequences, maxlens=[], dtype=None, padding='post', truncati
         real_maxlens+=[0]* (len(maxlens)-len(real_maxlens))
     assert len(maxlens)==len(real_maxlens)
 
-    maxlens=[(real_maxlen if maxlen is None else maxlen) for maxlen, real_maxlen in zip(maxlens, real_maxlens)]
+    maxlens=[(real_maxlen if (maxlen is None or real_maxlen<maxlen) else maxlen) for maxlen, real_maxlen in zip(maxlens, real_maxlens)]
 
     if 0 in maxlens:
         return np.full(shape=(nb_samples,) + (1,)*len(maxlens) + sample_shape, fill_value=value).astype(dtype)#np.empty(shape=(nb_samples, 0, 0)).astype(dtype)
