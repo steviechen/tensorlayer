@@ -1632,7 +1632,7 @@ def process_sequences(sequences, end_id=0, pad_val=0, is_shorten=True, remain_en
             sequences[i] = seq[:max_length]
     return sequences
 
-def sequences_add_start_id(sequences, start_id=0, remove_last=False):
+def sequences_add_start_id(sequences, start_id=0, remove_last=False, inplace=False):
     """Add special start token(id) in the beginning of each sequence.
 
     Examples
@@ -1649,7 +1649,7 @@ def sequences_add_start_id(sequences, start_id=0, remove_last=False):
     >>> decode_seq = [start_id, a, b] <-- sequences_add_start_id(input, start_id, True)
     """
     # sequences_out = [[] for _ in range(len(sequences))]#[[]] * len(sequences)
-    sequences_out=copy.deepcopy(sequences)
+    sequences_out=sequences if inplace else copy.deepcopy(sequences)
     for i in range(len(sequences)):
         sequences_out[i].insert(0, start_id)
         if remove_last:
@@ -1661,7 +1661,7 @@ def sequences_add_start_id(sequences, start_id=0, remove_last=False):
     return sequences_out
 
 
-def sequences_add_start_3d(sequences, start=0, remove_last=False):
+def sequences_add_start_3d(sequences, start=0, remove_last=False, inplace=False):
     """Add special start token(id) in the beginning of each sequence.
 
     Examples
@@ -1678,7 +1678,7 @@ def sequences_add_start_3d(sequences, start=0, remove_last=False):
     >>> decode_seq = [start_id, a, b] <-- sequences_add_start_id(input, start_id, True)
     """
     # sequences_out = [[] for _ in range(len(sequences))]#[[]] * len(sequences)
-    sequences_out=copy.deepcopy(sequences)
+    sequences_out=sequences if inplace else copy.deepcopy(sequences)
     for i, sequence in enumerate(sequences):
         for j in range(len(sequence)):
             sequences_out[i][j].insert(0, start)

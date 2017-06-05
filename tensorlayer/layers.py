@@ -26,6 +26,7 @@ import copy
 set_keep = globals()
 set_keep['_layers_name_list'] =[]
 set_keep['name_reuse'] = False
+set_keep['name_reuse_stack'] = []
 
 try:  # For TF12 and later
     TF_GRAPHKEYS_VARIABLES = tf.GraphKeys.GLOBAL_VARIABLES
@@ -115,6 +116,15 @@ def set_name_reuse(enable=True):
     - see ``tutorial_ptb_lstm.py`` for example.
     """
     set_keep['name_reuse'] = enable
+
+def push_name_reuse(enable=True):
+    set_keep['name_reuse_stack'].append(set_keep['name_reuse'])
+    set_name_reuse(enable=enable)
+
+def pop_name_reuse():
+    enable=set_keep['name_reuse_stack'].pop()
+    set_name_reuse(enable=enable)
+    return enable
 
 def initialize_rnn_state(state):
     """Return the initialized RNN state.
@@ -262,6 +272,8 @@ class Layer(object):
         scope_name=tf.get_variable_scope().name
         if scope_name:
             name = scope_name + '/' + name
+        if name=='ImageMetadataLandmarkTypeSequenceLayer_27x2/inputs/reusable/ImageMetadataLandmarkTypeLayer_18_27/inputs/decode1_seq':
+            print(name)
         if (name in set_keep['_layers_name_list']) and name_reuse == False:
             raise Exception("Layer '%s' already exists, please choice other 'name' or reuse this layer\
             \nHint : Use different name for different 'Layer' (The name is used to control parameter sharing)" % name)
@@ -642,6 +654,42 @@ class EmbeddingInputlayer(Layer):
         self.all_layers = [self.outputs]
         self.all_params = [embeddings]
         self.all_drop = {}
+
+class EmbeddingLookuplayer(Layer):
+    """
+    The :class:`EmbeddingLookuplayer` class similar to :class:`EmbeddingLookuplayer`,
+    except that it takes a layer as input instead of a tensor.
+    The output is the embedded word vector.
+    """
+
+    def __init__(
+        self,
+        layer=None,
+        vocabulary_size=80000,
+        embedding_size=200,
+        E_init=tf.random_uniform_initializer(-0.1, 0.1),
+        E_init_args={},
+        name='embedding_lookup_layer',
+    ):
+        Layer.__init__(self, name=name)
+        self.inputs = layer.outputs
+        print("  [TL] EmbeddingLookuplayer %s: (%d, %d)" % (self.name, vocabulary_size, embedding_size))
+
+        with tf.variable_scope(name) as vs:
+            embeddings = tf.get_variable(name='embeddings',
+                                         shape=(vocabulary_size, embedding_size),
+                                         initializer=E_init,
+                                         **E_init_args)
+            embed = tf.nn.embedding_lookup(embeddings, self.inputs)
+
+        self.outputs = embed
+
+        self.all_layers = list(layer.all_layers)
+        self.all_params = list(layer.all_params)
+        self.all_drop = dict(layer.all_drop)
+
+        self.all_params.extend([embeddings])
+        self.all_layers.extend([self.outputs])
 
 ## Dense layer
 class DenseLayer(Layer):
@@ -3685,6 +3733,9 @@ def retrieve_seq_length_op2(data):
 
 
 def retrieve_seq_length_op3(data, pad_val=0):
+    if isinstance(data, Layer):
+        data=data.outputs
+
     data_shape_size = data.get_shape().ndims
     if data_shape_size == 3:
         return tf.reduce_sum(tf.cast(tf.reduce_any(tf.not_equal(data, pad_val), axis=2), dtype=tf.int32), 1)
@@ -5171,6 +5222,7 @@ class HashTableLayer(Layer):
     def __init__(
         self,
         layer = None,
+        table = None,
         keys = [],
         values = [],
         key_dtype = None,
@@ -5182,11 +5234,14 @@ class HashTableLayer(Layer):
         self.inputs = layer.outputs
         print("  [TL] HashTableLayer %s: keys:%s values:%s" % (self.name, keys, values))
 
-        self.table = tf.contrib.lookup.HashTable(
-            tf.contrib.lookup.KeyValueTensorInitializer(keys, values,
-                                                        key_dtype = key_dtype, value_dtype = value_dtype,
-                                                        name=name+'.key_value_init'),
-            default_value, name=name+'.table')
+        if table:
+            self.table = table
+        else:
+            self.table = tf.contrib.lookup.HashTable(
+                tf.contrib.lookup.KeyValueTensorInitializer(keys, values,
+                                                            key_dtype = key_dtype, value_dtype = value_dtype,
+                                                            name=name+'.key_value_init'),
+                default_value, name=name+'.table')
 
         self.outputs = self.table.lookup(tf.cast(self.inputs, self.table.key_dtype), name=name+'.lookup')
 
