@@ -1470,6 +1470,14 @@ def pad_sequences_nd(sequences, maxlens=[], dtype=None, padding='post', truncati
     if not isinstance(truncating, (list, tuple)):
         truncating=[truncating for _ in maxlens]
 
+    num_dims=max(len(maxlens), len(truncating))
+
+    if len(maxlens)<num_dims:
+        maxlens+=[None]*(num_dims-len(maxlens))
+
+    if len(truncating)<num_dims:
+        truncating+=[None]*(num_dims-len(truncating))
+
     # if not isinstance(padding, (list, tuple)):
     #     padding=[padding for _ in maxlens]
 

@@ -347,6 +347,32 @@ class InputLayer(Layer):
         self.all_params = []
         self.all_drop = {}
 
+## Wrapper layer for dictionary/list of tensors/layers or for a single tensor
+class TensorWrapperLayer(Layer):
+    def __init__(
+        self,
+        inputs=None,
+        name='tensor_wrapper_layer'
+    ):
+        super(__class__, self).__init__(inputs=inputs, name=name)
+        print("  TensorWrapperLayer  %s: %s" % (self.name, inputs))
+        self.outputs = inputs
+        self.all_layers = []
+        self.all_params = []
+        self.all_drop = {}
+
+        input_list = []
+        if isinstance(inputs, dict):
+            input_list = inputs.values()
+        elif isinstance(inputs, (list, tuple)):
+            input_list = inputs
+
+        for input in input_list:
+            if isinstance(input, Layer):
+                self.all_layers.extend(list(input.all_layers))
+                self.all_params.extend(list(input.all_params))
+                self.all_drop.update(dict(input.all_drop))
+
 ## OneHot layer
 class OneHotInputLayer(Layer):
     """
