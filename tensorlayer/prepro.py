@@ -1434,7 +1434,8 @@ def pad_sequences_3d(sequences, maxlen1=None, maxlen2=None, dtype='int32', paddi
     return x
 
 
-def pad_sequences_nd(sequences, maxlens=[], dtype=None, padding='post', truncating='pre', value=0, sample_shape=()):
+def pad_sequences_nd(sequences, maxlens=[], dtype=None, padding='post', truncating='pre', value=0, sample_shape=(),
+                     go_value=None, eos_value=None):
     """Pads each sequence to the same length:
     the length of the longest sequence.
     If maxlen is provided, any sequence longer
@@ -1532,7 +1533,13 @@ def pad_sequences_nd(sequences, maxlens=[], dtype=None, padding='post', truncati
     maxlens=[(real_maxlen if (maxlen is None or real_maxlen<maxlen) else maxlen) for maxlen, real_maxlen in zip(maxlens, real_maxlens)]
 
     if 0 in maxlens:
-        return np.full(shape=(nb_samples,) + (1,)*len(maxlens) + sample_shape, fill_value=value).astype(dtype)#np.empty(shape=(nb_samples, 0, 0)).astype(dtype)
+        if go_value is not None and eos_value is not None:
+            s=(nb_samples,) + (1,) * len(maxlens)
+            return np.concatenate((np.full(shape=s + sample_shape, fill_value=go_value).astype(dtype),
+                                   np.full(shape=s + sample_shape, fill_value=eos_value).astype(dtype)),
+                                  axis=len(s)-1)
+        else:
+            return np.full(shape=(nb_samples,) + (1,)*len(maxlens) + sample_shape, fill_value=eos_value if eos_value is not None else value).astype(dtype)#np.empty(shape=(nb_samples, 0, 0)).astype(dtype)
     # take the sample shape from the first non empty sequence
     # checking for consistency in the main loop below.
     flattened_seq=sequences
@@ -1556,7 +1563,12 @@ def pad_sequences_nd(sequences, maxlens=[], dtype=None, padding='post', truncati
     del flattened_seq
 
     #x = (np.ones((nb_samples, maxlen) + sample_shape) * value).astype(dtype)
-    x = np.full(shape=(nb_samples,) + tuple(maxlens) + sample_shape, fill_value=value).astype(dtype)
+    maxlens_with_go_eos=maxlens.copy()
+    if go_value is not None:
+        maxlens_with_go_eos[-1]+=1
+    if eos_value is not None:
+        maxlens_with_go_eos[-1]+=1
+    x = np.full(shape=(nb_samples,) + tuple(maxlens_with_go_eos) + sample_shape, fill_value=value).astype(dtype)
     random_state_stack=[]
     def pad_sequence(seq, np_arrary, level):
         if level==len(maxlens):
@@ -1566,9 +1578,33 @@ def pad_sequences_nd(sequences, maxlens=[], dtype=None, padding='post', truncati
                                  (seq.shape[1:], level, sample_shape))
 
             if padding == 'post':
-                np_arrary[:len(seq)] = seq
+                pos = 0
+                if go_value is not None:
+                    np_arrary[pos:pos+1] = go_value
+                    pos += 1
+                np_arrary[pos:pos+len(seq)] = seq
+                pos += len(seq)
+                if eos_value is not None:
+                    np_arrary[pos:pos+1] = eos_value
+                    pos += 1
             elif padding == 'pre':
-                np_arrary[-len(seq):] = seq
+                pos = 0
+                if go_value is not None:
+                    pos += 1
+                pos += len(seq)
+                if eos_value is not None:
+                    pos += 1
+
+                pos=len(np_arrary)-pos
+                if go_value is not None:
+                    np_arrary[pos:pos + 1] = go_value
+                    pos += 1
+
+                np_arrary[pos:pos + len(seq)] = seq
+                pos += len(seq)
+                if eos_value is not None:
+                    np_arrary[pos:pos + 1] = eos_value
+                    pos += 1
 
             return
 

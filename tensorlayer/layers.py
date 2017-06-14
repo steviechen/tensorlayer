@@ -4695,8 +4695,8 @@ class ConcatLayer(Layer):
             self.outputs = tf.concat(self.inputs, concat_dim, name=name)
         except: # TF0.12
             self.outputs = tf.concat(concat_dim, self.inputs, name=name)
-        self.n_units = int(self.outputs.get_shape()[-1])
-        print("  [TL] ConcatLayer %s: %d" % (self.name, self.n_units))
+        self.n_units = self.outputs.get_shape().as_list()[-1]#int(self.outputs.get_shape()[-1])
+        print("  [TL] ConcatLayer %s: %s" % (self.name, self.n_units))
 
         self.all_layers = list(layer[0].all_layers)
         self.all_params = list(layer[0].all_params)
@@ -5258,7 +5258,7 @@ class HashTableLayer(Layer):
     ):
         Layer.__init__(self, name=name)
         self.inputs = layer.outputs
-        print("  [TL] HashTableLayer %s: keys:%s values:%s" % (self.name, keys, values))
+        print("  [TL] HashTableLayer %s: keys[:10]:%s... values[:10]:%s..." % (self.name, keys[:10], values[:10]))
 
         if table:
             self.table = table
