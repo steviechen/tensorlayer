@@ -1570,9 +1570,11 @@ def pad_sequences_nd(sequences, maxlens=[], dtype=None, padding='post', truncati
         maxlens_with_go_eos[-1]+=1
     x = np.full(shape=(nb_samples,) + tuple(maxlens_with_go_eos) + sample_shape, fill_value=value).astype(dtype)
     random_state_stack=[]
-    def pad_sequence(seq, np_arrary, level):
-        if level==len(maxlens):
+    def pad_sequence(seq, np_array, level):
+        if level==len(maxlens):#the deepest level
             seq = np.asarray(seq, dtype=dtype)
+            if len(seq)==0:
+                seq=seq.reshape(shape=seq.shape[0:1]+sample_shape)
             if seq.shape[1:] != sample_shape:
                 raise ValueError('Shape of sample %s of sequence at level %s is different from expected shape %s' %
                                  (seq.shape[1:], level, sample_shape))
@@ -1580,12 +1582,12 @@ def pad_sequences_nd(sequences, maxlens=[], dtype=None, padding='post', truncati
             if padding == 'post':
                 pos = 0
                 if go_value is not None:
-                    np_arrary[pos:pos+1] = go_value
+                    np_array[pos:pos+1] = go_value
                     pos += 1
-                np_arrary[pos:pos+len(seq)] = seq
+                np_array[pos:pos+len(seq)] = seq
                 pos += len(seq)
                 if eos_value is not None:
-                    np_arrary[pos:pos+1] = eos_value
+                    np_array[pos:pos+1] = eos_value
                     pos += 1
             elif padding == 'pre':
                 pos = 0
@@ -1595,23 +1597,28 @@ def pad_sequences_nd(sequences, maxlens=[], dtype=None, padding='post', truncati
                 if eos_value is not None:
                     pos += 1
 
-                pos=len(np_arrary)-pos
+                pos=len(np_array)-pos
                 if go_value is not None:
-                    np_arrary[pos:pos + 1] = go_value
+                    np_array[pos:pos + 1] = go_value
                     pos += 1
 
-                np_arrary[pos:pos + len(seq)] = seq
+                np_array[pos:pos + len(seq)] = seq
                 pos += len(seq)
                 if eos_value is not None:
-                    np_arrary[pos:pos + 1] = eos_value
+                    np_array[pos:pos + 1] = eos_value
                     pos += 1
 
             return
+        elif len(seq)==0:
+            # random_state_stack.append(random.getstate())#make sure sub level doesn't affect current level's random state
+            pad_sequence([], np_array[0], level+1)
+            # random.setstate(random_state_stack.pop())
 
         for sub_seq_idx, sub_seq in enumerate(seq):
             sub_seq_len = len(sub_seq)
-            if sub_seq_len == 0:
-                continue  # empty list was found
+            # if sub_seq_len == 0:
+            #     #continue  # empty list was found
+            #     print('aa')
 
             if sub_seq_len > maxlens[level]:
                 if truncating[level] == 'pre':
@@ -1628,7 +1635,7 @@ def pad_sequences_nd(sequences, maxlens=[], dtype=None, padding='post', truncati
                     sub_seq = sub_seq[:maxlens[level]]
 
             random_state_stack.append(random.getstate())#make sure sub level doesn't affect current level's random state
-            pad_sequence(sub_seq, np_arrary[sub_seq_idx], level+1)
+            pad_sequence(sub_seq, np_array[sub_seq_idx], level+1)
             random.setstate(random_state_stack.pop())
 
     pad_sequence(sequences, x, 0)

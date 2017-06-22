@@ -15,6 +15,7 @@ import numpy as np
 from six.moves import xrange
 import random, warnings
 import copy
+from tensorflow.python.util import nest
 
 # __all__ = [
 #     "Layer",
@@ -3889,6 +3890,7 @@ class DynamicRNNLayer(Layer):
         return_last = False,
         return_seq_2d = False,
         dynamic_rnn_init_args={},
+        variable_initial_state=False,
         name = 'dyrnn_layer',
     ):
         Layer.__init__(self, name=name)
@@ -3967,7 +3969,27 @@ class DynamicRNNLayer(Layer):
         self.cell=cell_instance_fn()
         # Initialize initial_state
         if initial_state is None:
-            self.initial_state = self.cell.zero_state(batch_size, dtype=tf.float32)#dtype="float")
+            if variable_initial_state:
+                def create_variable_initial_state(state_size, batch_size, dtype):#from rnn_cell_impl._zero_state_tensors
+                    """Create tensors of zeros based on state_size, batch_size, and dtype."""
+                    if nest.is_sequence(state_size):
+                        state_size_flat = nest.flatten(state_size)
+                        initial_state_flat = [
+                            tf.tile(tf.get_variable(name='initial_state_%d' % i, shape=(1, s), initializer=tf.zeros_initializer(), dtype=dtype),
+                                    multiples=(batch_size, 1))
+                            for i, s in enumerate(state_size_flat)
+                        ]
+
+                        initial_state = nest.pack_sequence_as(structure=state_size, flat_sequence=initial_state_flat)
+                    else:
+                        initial_state = tf.tile(tf.get_variable(name='initial_state', shape=(1, state_size), initializer=tf.zeros_initializer(), dtype=dtype),
+                                                multiples=(batch_size, 1))
+
+                    return initial_state
+
+                self.initial_state = create_variable_initial_state(state_size=self.cell.state_size, batch_size=batch_size, dtype=tf.float32)
+            else:
+                self.initial_state = self.cell.zero_state(batch_size, dtype=tf.float32)#dtype="float")
         else:
             self.initial_state = initial_state
 
@@ -4125,6 +4147,7 @@ class BiDynamicRNNLayer(Layer):
         return_last = False,
         return_seq_2d = False,
         dynamic_rnn_init_args={},
+        variable_initial_state=False,
         name = 'bi_dyrnn_layer',
     ):
         Layer.__init__(self, name=name)
@@ -4206,12 +4229,39 @@ class BiDynamicRNNLayer(Layer):
             self.fw_cell=cell_instance_fn()
             self.bw_cell=cell_instance_fn()
             # Initial state of RNN
+
+            def create_variable_initial_state(state_size, batch_size, dtype, name='initial_state'):  # from rnn_cell_impl._zero_state_tensors
+                """Create tensors of zeros based on state_size, batch_size, and dtype."""
+                if nest.is_sequence(state_size):
+                    state_size_flat = nest.flatten(state_size)
+                    initial_state_flat = [
+                        tf.tile(tf.get_variable(name=name+'.%d' % i, shape=(1, s), initializer=tf.zeros_initializer(), dtype=dtype),
+                                multiples=(batch_size, 1))
+                        for i, s in enumerate(state_size_flat)
+                    ]
+
+                    initial_state = nest.pack_sequence_as(structure=state_size, flat_sequence=initial_state_flat)
+                else:
+                    initial_state = tf.tile(
+                        tf.get_variable(name=name, shape=(1, state_size), initializer=tf.zeros_initializer(), dtype=dtype),
+                        multiples=(batch_size, 1))
+
+                return initial_state
+
             if fw_initial_state is None:
-                self.fw_initial_state = self.fw_cell.zero_state(self.batch_size, dtype=tf.float32)
+                if variable_initial_state:
+                    self.fw_initial_state = create_variable_initial_state(state_size=self.fw_cell.state_size, batch_size=self.batch_size, dtype=tf.float32,
+                                                                          name='fw_initial_state')
+                else:
+                    self.fw_initial_state = self.fw_cell.zero_state(self.batch_size, dtype=tf.float32)
             else:
                 self.fw_initial_state = fw_initial_state
             if bw_initial_state is None:
-                self.bw_initial_state = self.bw_cell.zero_state(self.batch_size, dtype=tf.float32)
+                if variable_initial_state:
+                    self.bw_initial_state = create_variable_initial_state(state_size=self.bw_cell.state_size, batch_size=self.batch_size, dtype=tf.float32,
+                                                                          name='bw_initial_state')
+                else:
+                    self.bw_initial_state = self.bw_cell.zero_state(self.batch_size, dtype=tf.float32)
             else:
                 self.bw_initial_state = bw_initial_state
             # Computes sequence_length
