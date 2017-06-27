@@ -1574,7 +1574,7 @@ def pad_sequences_nd(sequences, maxlens=[], dtype=None, padding='post', truncati
         if level==len(maxlens):#the deepest level
             seq = np.asarray(seq, dtype=dtype)
             if len(seq)==0:
-                seq=seq.reshape(shape=seq.shape[0:1]+sample_shape)
+                seq=seq.reshape(seq.shape[0:1]+sample_shape)
             if seq.shape[1:] != sample_shape:
                 raise ValueError('Shape of sample %s of sequence at level %s is different from expected shape %s' %
                                  (seq.shape[1:], level, sample_shape))

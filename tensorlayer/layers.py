@@ -5682,27 +5682,188 @@ class MaxoutLayer(Layer):
         self.all_layers.extend( [self.outputs] )
         self.all_params.extend( [W, b] )
 
+class SeluLayer(Layer):
+    """
+    The :class:`SeluLayer` class is Scaled Exponential Linear Unit layer.
+    """
+
+    def __init__(
+            self,
+            layer=None,
+            dropout_keep=None,
+            dropout_is_fix=False,
+            name="selu_layer"
+    ):
+        Layer.__init__(self, name=name)
+        self.inputs = layer.outputs
+        print("  [TL] SeluLayer %s" % (self.name))
+
+        def selu(x):
+            with tf.variable_scope('elu') as scope:
+                alpha = 1.6732632423543772848170429916717
+                scale = 1.0507009873554804934193349852946
+                return scale * tf.where(x >= 0.0, x, alpha * tf.nn.elu(x))
+
+        import numbers
+        from tensorflow.python.framework import tensor_shape
+        from tensorflow.python.framework import tensor_util
+        from tensorflow.python.ops import math_ops
+        from tensorflow.python.ops import random_ops
+        from tensorflow.python.ops import array_ops
+        def dropout_selu(x, rate, alpha=-1.7580993408473766, fixedPointMean=0.0, fixedPointVar=1.0,
+                         noise_shape=None, seed=None, name=None, training=False):
+            """Dropout to a value with rescaling."""
+
+            def dropout_selu_impl(x, rate, alpha, noise_shape, seed, name):
+                keep_prob = 1.0 - rate
+                x = tf.convert_to_tensor(x, name="x")
+                if isinstance(keep_prob, numbers.Real) and not 0 < keep_prob <= 1:
+                    raise ValueError("keep_prob must be a scalar tensor or a float in the "
+                                     "range (0, 1], got %g" % keep_prob)
+                keep_prob = tf.convert_to_tensor(keep_prob, dtype=x.dtype, name="keep_prob")
+                keep_prob.get_shape().assert_is_compatible_with(tensor_shape.scalar())
+
+                alpha = tf.convert_to_tensor(alpha, dtype=x.dtype, name="alpha")
+                alpha.get_shape().assert_is_compatible_with(tensor_shape.scalar())
+
+                if tensor_util.constant_value(keep_prob) == 1:
+                    return x
+
+                noise_shape = noise_shape if noise_shape is not None else array_ops.shape(x)
+                random_tensor = keep_prob
+                random_tensor += random_ops.random_uniform(noise_shape, seed=seed, dtype=x.dtype)
+                binary_tensor = math_ops.floor(random_tensor)
+                ret = x * binary_tensor + alpha * (1 - binary_tensor)
+
+                a = math_ops.sqrt(fixedPointVar / (keep_prob * ((1 - keep_prob) * math_ops.pow(alpha - fixedPointMean, 2) + fixedPointVar)))
+
+                b = fixedPointMean - a * (keep_prob * fixedPointMean + (1 - keep_prob) * alpha)
+                ret = a * ret + b
+                ret.set_shape(x.get_shape())
+                return ret
+
+            with tf.variable_scope(name, "dropout", [x]) as name:
+                from tensorflow.python.layers import utils
+                return utils.smart_cond(training,
+                                        lambda: dropout_selu_impl(x, rate, alpha, noise_shape, seed, name),
+                                        lambda: array_ops.identity(x))
+
+        # with tf.name_scope(name) as scope:
+        with tf.variable_scope(name) as vs:
+            self.outputs = selu(self.inputs)
+            if dropout_keep is not None:
+                if dropout_is_fix:
+                    self.outputs = dropout_selu(self.outputs, rate=1.0-dropout_keep, training=True)
+                else:
+                    set_keep[name] = tf.placeholder(tf.float32, name=name+'.set_keep')
+                    self.outputs = dropout_selu(self.outputs, rate=1.0-set_keep[name], training=tf.less(set_keep[name], 1.0))
 
 
+        self.all_layers = list(layer.all_layers)
+        self.all_params = list(layer.all_params)
+        self.all_drop = dict(layer.all_drop)
+        if dropout_keep is not None and not dropout_is_fix:
+            self.all_drop.update({set_keep[name]: dropout_keep})
+
+        self.all_layers.extend([self.outputs])
 
 
+class PSeluLayer(Layer):
+    """
+    The :class:`PSeluLayer` class is Scaled Exponential Linear Unit layer.
+    """
+
+    def __init__(
+            self,
+            layer=None,
+            dropout_keep=None,
+            dropout_is_fix=False,
+            channel_shared=False,
+            alpha_init=tf.constant_initializer(value=1.6732632423543772848170429916717),
+            alpha_init_args={},
+            scale_init=tf.constant_initializer(value=1.0507009873554804934193349852946),
+            scale_init_args={},
+            name="pselu_layer"
+    ):
+        Layer.__init__(self, name=name)
+        self.inputs = layer.outputs
+        print("  [TL] SeluLayer %s" % (self.name))
+        if channel_shared:
+            w_shape = (1,)
+        else:
+            w_shape = int(self.inputs.get_shape()[-1])
+
+        import numbers
+        from tensorflow.python.framework import tensor_shape
+        from tensorflow.python.framework import tensor_util
+        from tensorflow.python.ops import math_ops
+        from tensorflow.python.ops import random_ops
+        from tensorflow.python.ops import array_ops
+        def dropout_selu(x, rate, alpha=-1.7580993408473766, fixedPointMean=0.0, fixedPointVar=1.0,
+                         noise_shape=None, seed=None, name=None, training=False):
+            """Dropout to a value with rescaling."""
+
+            def dropout_selu_impl(x, rate, alpha, noise_shape, seed, name):
+                keep_prob = 1.0 - rate
+                x = tf.convert_to_tensor(x, name="x")
+                if isinstance(keep_prob, numbers.Real) and not 0 < keep_prob <= 1:
+                    raise ValueError("keep_prob must be a scalar tensor or a float in the "
+                                     "range (0, 1], got %g" % keep_prob)
+                keep_prob = tf.convert_to_tensor(keep_prob, dtype=x.dtype, name="keep_prob")
+                keep_prob.get_shape().assert_is_compatible_with(tensor_shape.scalar())
+
+                alpha = tf.convert_to_tensor(alpha, dtype=x.dtype, name="alpha")
+                alpha.get_shape().assert_is_compatible_with(tensor_shape.scalar())
+
+                if tensor_util.constant_value(keep_prob) == 1:
+                    return x
+
+                noise_shape = noise_shape if noise_shape is not None else array_ops.shape(x)
+                random_tensor = keep_prob
+                random_tensor += random_ops.random_uniform(noise_shape, seed=seed, dtype=x.dtype)
+                binary_tensor = math_ops.floor(random_tensor)
+                ret = x * binary_tensor + alpha * (1 - binary_tensor)
+
+                a = math_ops.sqrt(fixedPointVar / (keep_prob * ((1 - keep_prob) * math_ops.pow(alpha - fixedPointMean, 2) + fixedPointVar)))
+
+                b = fixedPointMean - a * (keep_prob * fixedPointMean + (1 - keep_prob) * alpha)
+                ret = a * ret + b
+                ret.set_shape(x.get_shape())
+                return ret
+
+            with tf.variable_scope(name, "dropout", [x]) as name:
+                from tensorflow.python.layers import utils
+                return utils.smart_cond(training,
+                                        lambda: dropout_selu_impl(x, rate, alpha, noise_shape, seed, name),
+                                        lambda: array_ops.identity(x))
+
+        # with tf.name_scope(name) as scope:
+        with tf.variable_scope(name) as vs:
+            alpha = tf.get_variable(name='alpha', shape=w_shape, initializer=alpha_init, **alpha_init_args)
+            scale = tf.get_variable(name='scale', shape=w_shape, initializer=scale_init, **scale_init_args)
+
+            def selu(x):
+                with tf.variable_scope('pselu') as scope:
+                    # alpha = 1.6732632423543772848170429916717
+                    # scale = 1.0507009873554804934193349852946
+
+                    return scale * tf.where(x >= 0.0, x, alpha * tf.nn.elu(x))
+
+            self.outputs = selu(self.inputs)
+            if dropout_keep is not None:
+                if dropout_is_fix:
+                    self.outputs = dropout_selu(self.outputs, rate=1.0-dropout_keep, alpha=-1.0*alpha*scale, training=True)
+                else:
+                    set_keep[name] = tf.placeholder(tf.float32, name=name+'.set_keep')
+                    self.outputs = dropout_selu(self.outputs, rate=1.0-set_keep[name], alpha=-1.0*alpha*scale, training=tf.less(set_keep[name], 1.0))
 
 
+        self.all_layers = list(layer.all_layers)
+        self.all_params = list(layer.all_params)
+        self.all_drop = dict(layer.all_drop)
+        if dropout_keep is not None and not dropout_is_fix:
+            self.all_drop.update({set_keep[name]: dropout_keep})
 
+        self.all_layers.extend([self.outputs])
+        self.all_params.extend([alpha, scale])
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#

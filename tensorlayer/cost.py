@@ -406,6 +406,142 @@ def l2_loss_seq_with_mask(outputs, target_seqs, input_mask, return_details=False
     else:
         return loss
 
+def huber_loss_seq_with_mask(outputs, target_seqs, input_mask, name=None):
+    """Returns the expression of cross-entropy of two sequences, implement
+    softmax internally. Normally be used for Dynamic RNN outputs.
+
+    Parameters
+    -----------
+    logits : network identity outputs
+        2D tensor, ``network.outputs``, [batch_size, number of output units].
+    target_seqs : int of tensor, like word ID.
+        [batch_size, ?]
+    input_mask : the mask to compute loss
+        The same size with target_seqs, normally 0 and 1.
+    return_details : boolean
+        - If False (default), only returns the loss.
+        - If True, returns the loss, losses, weights and targets (reshape to one vetcor).
+
+    Examples
+    --------
+    - see Image Captioning Example.
+    """
+    weights = tf.to_float(tf.reshape(input_mask, [-1]))  # to one vector like targets
+    if target_seqs.get_shape().ndims > 2:
+        targets = tf.reshape(target_seqs, [-1, int(target_seqs.get_shape()[-1])])  # to one vector
+        weights = tf.expand_dims(weights, 1)
+    else:
+        targets = tf.reshape(target_seqs, [-1])  # to one vector
+
+    #losses=tf.squared_difference(outputs, targets, name="squared_error") * weights
+    try:
+        loss = tf.losses.huber_loss(targets, outputs, weights=weights,
+                                    delta=1.0, scope=name, reduction=tf.losses.Reduction.SUM_BY_NONZERO_WEIGHTS)
+    except:
+        class Reduction(object):
+            """Types of loss reduction."""
+
+            # Un-reduced weighted losses with the same shape as input.
+            NONE = "none"
+
+            # Scalar sum of `NONE`.
+            SUM = "weighted_sum"
+
+            # Scalar `SUM` divided by sum of weights.
+            MEAN = "weighted_mean"
+
+            # Scalar `SUM` divided by number of non-zero weights.
+            SUM_BY_NONZERO_WEIGHTS = "weighted_sum_by_nonzero_weights"
+
+            @classmethod
+            def all(cls):
+                return (
+                    cls.NONE,
+                    cls.SUM,
+                    cls.MEAN,
+                    cls.SUM_BY_NONZERO_WEIGHTS)
+
+            @classmethod
+            def validate(cls, key):
+                if key not in cls.all():
+                    raise ValueError("Invalid ReductionKey %s." % key)
+
+        def huber_loss(labels, predictions, weights=1.0, delta=1.0, scope=None,
+                       loss_collection=ops.GraphKeys.LOSSES,
+                       reduction=Reduction.SUM_BY_NONZERO_WEIGHTS):
+            from tensorflow.python.ops import math_ops
+            with ops.name_scope(scope, "huber_loss",
+                                (predictions, labels, weights)) as scope:
+                predictions = math_ops.to_float(predictions)
+                labels = math_ops.to_float(labels)
+                predictions.get_shape().assert_is_compatible_with(labels.get_shape())
+                error = math_ops.subtract(predictions, labels)
+                abs_error = math_ops.abs(error)
+                quadratic = math_ops.minimum(abs_error, delta)
+                # The following expression is the same in value as
+                # tf.maximum(abs_error - delta, 0), but importantly the gradient for the
+                # expression when abs_error == delta is 0 (for tf.maximum it would be 1).
+                # This is necessary to avoid doubling the gradient, since there is already a
+                # nonzero contribution to the gradient from the quadratic term.
+                linear = (abs_error - quadratic)
+                losses = 0.5 * quadratic ** 2 + delta * linear
+
+                def compute_weighted_loss(
+                        losses, weights=1.0, scope=None, loss_collection=ops.GraphKeys.LOSSES,
+                        reduction=Reduction.SUM_BY_NONZERO_WEIGHTS):
+                    """Computes the weighted loss.
+                    Args:
+                      losses: `Tensor` of shape `[batch_size, d1, ... dN]`.
+                      weights: Optional `Tensor` whose rank is either 0, or the same rank as
+                        `losses`, and must be broadcastable to `losses` (i.e., all dimensions must
+                        be either `1`, or the same as the corresponding `losses` dimension).
+                      scope: the scope for the operations performed in computing the loss.
+                      loss_collection: the loss will be added to these collections.
+                      reduction: Type of reduction to apply to loss.
+                    Returns:
+                      Weighted loss `Tensor` of the same type as `losses`. If `reduction` is
+                      `NONE`, this has the same shape as `losses`; otherwise, it is scalar.
+                    Raises:
+                      ValueError: If `weights` is `None` or the shape is not compatible with
+                        `losses`, or if the number of dimensions (rank) of either `losses` or
+                        `weights` is missing.
+                    """
+                    Reduction.validate(reduction)
+                    from tensorflow.python.ops import weights_broadcast_ops
+                    from tensorflow.python.ops.losses import util
+                    from tensorflow.python.ops.losses import losses_impl
+                    from tensorflow.python.ops import array_ops
+                    with ops.name_scope(scope, "weighted_loss", (losses, weights)):
+                        with ops.control_dependencies((
+                                weights_broadcast_ops.assert_broadcastable(weights, losses),)):
+                            losses = ops.convert_to_tensor(losses)
+                            input_dtype = losses.dtype
+                            losses = math_ops.to_float(losses)
+                            weights = math_ops.to_float(weights)
+                            weighted_losses = math_ops.multiply(losses, weights)
+                            if reduction == Reduction.NONE:
+                                loss = weighted_losses
+                            else:
+                                loss = math_ops.reduce_sum(weighted_losses)
+                                if reduction == Reduction.MEAN:
+                                    loss = losses_impl._safe_mean(
+                                        loss,
+                                        math_ops.reduce_sum(array_ops.ones_like(losses) * weights))
+                                elif reduction == Reduction.SUM_BY_NONZERO_WEIGHTS:
+                                    loss = losses_impl._safe_mean(loss, losses_impl._num_present(losses, weights))
+
+                            # Convert the result back to the input type.
+                            loss = math_ops.cast(loss, input_dtype)
+                            util.add_loss(loss, loss_collection)
+                            return loss
+
+                return compute_weighted_loss(
+                    losses, weights, scope, loss_collection, reduction=reduction)
+
+        loss = huber_loss(targets, outputs, weights=weights,
+                          delta=1.0, scope=name, reduction=Reduction.SUM_BY_NONZERO_WEIGHTS)
+
+    return loss
 
 def cosine_similarity(v1, v2):
     """Cosine similarity [-1, 1], `wiki <https://en.wikipedia.org/wiki/Cosine_similarity>`_.
