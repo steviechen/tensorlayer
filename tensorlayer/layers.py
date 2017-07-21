@@ -283,6 +283,10 @@ class Layer(object):
             if name not in ['', None, False]:
                 set_keep['_layers_name_list'].append(name)
 
+        self.all_layers = []
+        self.all_params = []
+        self.all_drop = {}
+
 
     def print_params(self, details=True):
         ''' Print all info of parameters in the network'''
@@ -4675,6 +4679,7 @@ class LambdaLayer(Layer):
         layer = None,
         fn = None,
         fn_args = {},
+        additional_layers=[],
         name = 'lambda_layer',
     ):
         Layer.__init__(self, name=name)
@@ -4688,8 +4693,15 @@ class LambdaLayer(Layer):
         self.all_layers = list(layer.all_layers)
         self.all_params = list(layer.all_params)
         self.all_drop = dict(layer.all_drop)
+
+        for l in additional_layers:
+            self.all_layers.extend(list(l.all_layers))
+            self.all_params.extend(list(l.all_params))
+            self.all_drop.update(dict(l.all_drop))
+
         self.all_layers.extend( [self.outputs] )
         self.all_params.extend( variables )
+
 
 ## Merge layer
 class ConcatLayer(Layer):
@@ -5866,4 +5878,139 @@ class PSeluLayer(Layer):
 
         self.all_layers.extend([self.outputs])
         self.all_params.extend([alpha, scale])
+
+
+
+class RNNDecoderLayer(Layer):
+    """
+    The :class:`RNNDecoderLayer` class is a dynamic decoder layer
+    """
+
+    def __init__(
+            self,
+            layer=None,
+            cell_fn=None,  # tf.nn.rnn_cell.LSTMCell,
+            cell_init_args={},
+            n_hidden=256,
+            initializer=tf.random_uniform_initializer(-0.1, 0.1),
+            max_sequence_length=None,
+            dropout=None,
+            n_layer=1,
+            return_last=False,
+            return_seq_2d=False,
+            embedding_matrix=None,
+            start_tokens=None,
+            end_token=None,
+            output_W_init=tf.truncated_normal_initializer(stddev=0.1),
+            output_b_init=tf.constant_initializer(value=0.0),
+            output_trainable=True,
+            dynamic_decode_init_args={},
+            name="rnn_decoder_layer"
+    ):
+        Layer.__init__(self, name=name)
+        self.inputs = layer.outputs
+        print("  [TL] RNNDecoderLayer %s" % (self.name))
+
+        # Get the batch_size
+        fixed_batch_size = self.inputs.get_shape().with_rank_at_least(1)[0]
+        if fixed_batch_size.value:
+            batch_size = fixed_batch_size.value
+            print("       batch_size (concurrent processes): %d" % batch_size)
+        else:
+            from tensorflow.python.ops import array_ops
+            batch_size = array_ops.shape(self.inputs)[0]
+            print("       non specified batch_size, uses a tensor instead.")
+        self.batch_size = batch_size
+
+        self.embedding_matrix = embedding_matrix
+        vocabulary_size, embedding_size = embedding_matrix.shape
+
+        # Creats the cell function
+        cell_instance_fn=lambda: cell_fn(num_units=n_hidden, **cell_init_args)
+        # self.cell = cell_fn(num_units=n_hidden, **cell_init_args)
+
+        # Apply dropout
+        if dropout:
+            if type(dropout) in [tuple, list]:
+                in_keep_prob = dropout[0]
+                out_keep_prob = dropout[1]
+            elif isinstance(dropout, float):
+                in_keep_prob, out_keep_prob = dropout, dropout
+            else:
+                raise Exception("Invalid dropout type (must be a 2-D tuple of "
+                                "float)")
+            try: # TF1.0
+                DropoutWrapper_fn = tf.contrib.rnn.DropoutWrapper
+            except:
+                DropoutWrapper_fn = tf.nn.rnn_cell.DropoutWrapper
+
+            cell_instance_fn1=cell_instance_fn
+            cell_instance_fn=DropoutWrapper_fn(
+                                cell_instance_fn1(),
+                                input_keep_prob=in_keep_prob,
+                                output_keep_prob=out_keep_prob)
+            # self.cell = DropoutWrapper_fn(
+            #           self.cell,
+            #           input_keep_prob=in_keep_prob,
+            #           output_keep_prob=out_keep_prob)
+        # Apply multiple layers
+        if n_layer > 1:
+            try:
+                MultiRNNCell_fn = tf.contrib.rnn.MultiRNNCell
+            except:
+                MultiRNNCell_fn = tf.nn.rnn_cell.MultiRNNCell
+
+            cell_instance_fn2=cell_instance_fn
+            try:
+                cell_instance_fn=lambda: MultiRNNCell_fn([cell_instance_fn2() for _ in range(n_layer)], state_is_tuple=True)
+                # self.cell = MultiRNNCell_fn([self.cell] * n_layer, state_is_tuple=True)
+            except:
+                cell_instance_fn=lambda: MultiRNNCell_fn([cell_instance_fn2() for _ in range(n_layer)])
+                # self.cell = MultiRNNCell_fn([self.cell] * n_layer)
+
+        # Main - Computes outputs and last_states
+        with tf.variable_scope(name, initializer=initializer) as vs:
+            helper = tf.contrib.seq2seq.GreedyEmbeddingHelper(embedding=embedding_matrix, start_tokens=start_tokens, end_token=end_token)
+
+            from tensorflow.python.layers import core
+            output_layer = core.Dense(units=vocabulary_size,
+                                      activation=tf.nn.softmax,
+                                      use_bias=True,
+                                      kernel_initializer=output_W_init,
+                                      bias_initializer=output_b_init,
+                                      trainable=output_trainable,
+                                      name='dense')
+
+            self.cell = cell_instance_fn()
+
+            if self.inputs:#ndims
+                initial_state=self.inputs
+            else:
+                initial_state=tf.reshape(self.inputs, shape=(-1,)+self.cell.state_size)
+
+            decoder = tf.contrib.seq2seq.BasicDecoder(
+                cell=self.cell,
+                helper=helper,
+                initial_state=initial_state,
+                output_layer=output_layer)
+
+            final_outputs, final_state, final_sequence_lengths = \
+                tf.contrib.seq2seq.dynamic_decode(decoder=decoder, output_time_major=False, impute_finished=True,
+                                                  maximum_iterations=max_sequence_length,
+                                                  scope='rnn', **dynamic_decode_init_args)
+
+            rnn_variables = tf.get_collection(TF_GRAPHKEYS_VARIABLES, scope=vs.name)
+
+        # Final state
+        self.final_state = final_state
+
+        self.sequence_length = final_sequence_lengths
+
+        self.all_layers = list(layer.all_layers)
+        self.all_params = list(layer.all_params)
+        self.all_drop = dict(layer.all_drop)
+
+        self.all_layers.extend( [self.outputs] )
+        self.all_params.extend( rnn_variables )
+
 

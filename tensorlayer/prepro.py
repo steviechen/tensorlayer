@@ -1532,14 +1532,25 @@ def pad_sequences_nd(sequences, maxlens=[], dtype=None, padding='post', truncati
 
     maxlens=[(real_maxlen if (maxlen is None or real_maxlen<maxlen) else maxlen) for maxlen, real_maxlen in zip(maxlens, real_maxlens)]
 
+    maxlens_with_go_eos=maxlens.copy()
+    if go_value is not None:
+        # maxlens_with_go_eos[-1]+=1
+        maxlens_with_go_eos=[x+1 for x in maxlens_with_go_eos]
+    if eos_value is not None:
+        # maxlens_with_go_eos[-1]+=1
+        maxlens_with_go_eos = [x + 1 for x in maxlens_with_go_eos]
+
     if 0 in maxlens:
+        maxlens_with_go_eos=tuple([1 if l==0 else l for l in maxlens_with_go_eos])
         if go_value is not None and eos_value is not None:
-            s=(nb_samples,) + (1,) * len(maxlens)
+            # s=(nb_samples,) + (1,) * len(maxlens)
+            s=(nb_samples,) + maxlens_with_go_eos
             return np.concatenate((np.full(shape=s + sample_shape, fill_value=go_value).astype(dtype),
                                    np.full(shape=s + sample_shape, fill_value=eos_value).astype(dtype)),
                                   axis=len(s)-1)
         else:
-            return np.full(shape=(nb_samples,) + (1,)*len(maxlens) + sample_shape, fill_value=eos_value if eos_value is not None else value).astype(dtype)#np.empty(shape=(nb_samples, 0, 0)).astype(dtype)
+            #return np.full(shape=(nb_samples,) + (1,)*len(maxlens) + sample_shape, fill_value=eos_value if eos_value is not None else value).astype(dtype)#np.empty(shape=(nb_samples, 0, 0)).astype(dtype)
+            return np.full(shape=(nb_samples,) + maxlens_with_go_eos + sample_shape, fill_value=eos_value if eos_value is not None else value).astype(dtype)  # np.empty(shape=(nb_samples, 0, 0)).astype(dtype)
     # take the sample shape from the first non empty sequence
     # checking for consistency in the main loop below.
     flattened_seq=sequences
@@ -1563,11 +1574,6 @@ def pad_sequences_nd(sequences, maxlens=[], dtype=None, padding='post', truncati
     del flattened_seq
 
     #x = (np.ones((nb_samples, maxlen) + sample_shape) * value).astype(dtype)
-    maxlens_with_go_eos=maxlens.copy()
-    if go_value is not None:
-        maxlens_with_go_eos[-1]+=1
-    if eos_value is not None:
-        maxlens_with_go_eos[-1]+=1
     x = np.full(shape=(nb_samples,) + tuple(maxlens_with_go_eos) + sample_shape, fill_value=value).astype(dtype)
     random_state_stack=[]
     def pad_sequence(seq, np_array, level):
@@ -1614,7 +1620,14 @@ def pad_sequences_nd(sequences, maxlens=[], dtype=None, padding='post', truncati
             pad_sequence([], np_array[0], level+1)
             # random.setstate(random_state_stack.pop())
 
-        for sub_seq_idx, sub_seq in enumerate(seq):
+        sub_seq_idx=0
+        if level>0 and go_value is not None:
+            np_array[0].fill(go_value)
+            # np_array[0,0]=go_value
+            sub_seq_idx+=1
+
+        # for sub_seq_idx, sub_seq in enumerate(seq):
+        for sub_seq in seq:
             sub_seq_len = len(sub_seq)
             # if sub_seq_len == 0:
             #     #continue  # empty list was found
@@ -1637,6 +1650,13 @@ def pad_sequences_nd(sequences, maxlens=[], dtype=None, padding='post', truncati
             random_state_stack.append(random.getstate())#make sure sub level doesn't affect current level's random state
             pad_sequence(sub_seq, np_array[sub_seq_idx], level+1)
             random.setstate(random_state_stack.pop())
+
+            sub_seq_idx+=1
+
+        if level>0 and eos_value is not None:
+            np_array[sub_seq_idx].fill(eos_value)
+            # np_array[sub_seq_idx,0]=eos_value
+
 
     pad_sequence(sequences, x, 0)
 
