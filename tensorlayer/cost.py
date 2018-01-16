@@ -8,8 +8,8 @@ import tensorflow as tf
 from tensorflow.python.framework import ops
 from tensorflow.python.ops import standard_ops
 
-
 ## Cost Functions
+
 
 def cross_entropy(output, target, name=None):
     """It is a softmax cross-entropy operation, returns the TensorFlow expression of cross-entropy of two distributions, implement
@@ -37,13 +37,18 @@ def cross_entropy(output, target, name=None):
     #     return tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=output, targets=target))
     # except: # TF 1.0
     assert name is not None, "Please give a unique name to tl.cost.cross_entropy for TF1.0+"
-    return tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=target, logits=output, name=name))
+    return tf.reduce_mean(
+        tf.nn.sparse_softmax_cross_entropy_with_logits(
+            labels=target, logits=output, name=name))
+
 
 def sigmoid_cross_entropy(output, target, name=None):
     """It is a sigmoid cross-entropy operation, see ``tf.nn.sigmoid_cross_entropy_with_logits``.
     """
     # try: # TF 1.0
-    return tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=target, logits=output, name=name))
+    return tf.reduce_mean(
+        tf.nn.sigmoid_cross_entropy_with_logits(
+            labels=target, logits=output, name=name))
     # except:
     #     return tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=output, targets=target))
 
@@ -68,16 +73,22 @@ def binary_cross_entropy(output, target, epsilon=1e-8, name='bce_loss'):
     -----------
     - `DRAW <https://github.com/ericjang/draw/blob/master/draw.py#L73>`_
     """
-#     from tensorflow.python.framework import ops
-#     with ops.op_scope([output, target], name, "bce_loss") as name:
-#         output = ops.convert_to_tensor(output, name="preds")
-#         target = ops.convert_to_tensor(targets, name="target")
+    #     from tensorflow.python.framework import ops
+    #     with ops.op_scope([output, target], name, "bce_loss") as name:
+    #         output = ops.convert_to_tensor(output, name="preds")
+    #         target = ops.convert_to_tensor(targets, name="target")
     with tf.name_scope(name):
-        return tf.reduce_mean(tf.reduce_sum(-(target * tf.log(output + epsilon) +
-                              (1. - target) * tf.log(1. - output + epsilon)), axis=1))
+        return tf.reduce_mean(
+            tf.reduce_sum(
+                -(target * tf.log(output + epsilon) +
+                  (1. - target) * tf.log(1. - output + epsilon)),
+                axis=1))
 
 
-def mean_squared_error(output, target, is_mean=False, name="mean_squared_error"):
+def mean_squared_error(output,
+                       target,
+                       is_mean=False,
+                       name="mean_squared_error"):
     """ Return the TensorFlow expression of mean-square-error (L2) of two batch of data.
 
     Parameters
@@ -91,24 +102,35 @@ def mean_squared_error(output, target, is_mean=False, name="mean_squared_error")
     - `Wiki Mean Squared Error <https://en.wikipedia.org/wiki/Mean_squared_error>`_
     """
     with tf.name_scope(name):
-        if output.get_shape().ndims == 2:   # [batch_size, n_feature]
+        if output.get_shape().ndims == 2:  # [batch_size, n_feature]
             if is_mean:
-                mse = tf.reduce_mean(tf.reduce_mean(tf.squared_difference(output, target), 1))
+                mse = tf.reduce_mean(
+                    tf.reduce_mean(tf.squared_difference(output, target), 1))
             else:
-                mse = tf.reduce_mean(tf.reduce_sum(tf.squared_difference(output, target), 1))
-        elif output.get_shape().ndims == 3: # [batch_size, w, h]
+                mse = tf.reduce_mean(
+                    tf.reduce_sum(tf.squared_difference(output, target), 1))
+        elif output.get_shape().ndims == 3:  # [batch_size, w, h]
             if is_mean:
-                mse = tf.reduce_mean(tf.reduce_mean(tf.squared_difference(output, target), [1, 2]))
+                mse = tf.reduce_mean(
+                    tf.reduce_mean(
+                        tf.squared_difference(output, target), [1, 2]))
             else:
-                mse = tf.reduce_mean(tf.reduce_sum(tf.squared_difference(output, target), [1, 2]))
-        elif output.get_shape().ndims == 4: # [batch_size, w, h, c]
+                mse = tf.reduce_mean(
+                    tf.reduce_sum(
+                        tf.squared_difference(output, target), [1, 2]))
+        elif output.get_shape().ndims == 4:  # [batch_size, w, h, c]
             if is_mean:
-                mse = tf.reduce_mean(tf.reduce_mean(tf.squared_difference(output, target), [1, 2, 3]))
+                mse = tf.reduce_mean(
+                    tf.reduce_mean(
+                        tf.squared_difference(output, target), [1, 2, 3]))
             else:
-                mse = tf.reduce_mean(tf.reduce_sum(tf.squared_difference(output, target), [1, 2, 3]))
+                mse = tf.reduce_mean(
+                    tf.reduce_sum(
+                        tf.squared_difference(output, target), [1, 2, 3]))
         else:
             raise Exception("Unknow dimension")
         return mse
+
 
 def normalized_mean_square_error(output, target):
     """Return the TensorFlow expression of normalized mean-square-error of two distributions.
@@ -119,17 +141,23 @@ def normalized_mean_square_error(output, target):
     target : 2D, 3D or 4D tensor.
     """
     with tf.name_scope("mean_squared_error_loss"):
-        if output.get_shape().ndims == 2:   # [batch_size, n_feature]
-            nmse_a = tf.sqrt(tf.reduce_sum(tf.squared_difference(output, target), axis=1))
+        if output.get_shape().ndims == 2:  # [batch_size, n_feature]
+            nmse_a = tf.sqrt(
+                tf.reduce_sum(tf.squared_difference(output, target), axis=1))
             nmse_b = tf.sqrt(tf.reduce_sum(tf.square(target), axis=1))
-        elif output.get_shape().ndims == 3:   # [batch_size, w, h]
-            nmse_a = tf.sqrt(tf.reduce_sum(tf.squared_difference(output, target), axis=[1,2]))
-            nmse_b = tf.sqrt(tf.reduce_sum(tf.square(target), axis=[1,2]))
-        elif output.get_shape().ndims == 4: # [batch_size, w, h, c]
-            nmse_a = tf.sqrt(tf.reduce_sum(tf.squared_difference(output, target), axis=[1,2,3]))
-            nmse_b = tf.sqrt(tf.reduce_sum(tf.square(target), axis=[1,2,3]))
+        elif output.get_shape().ndims == 3:  # [batch_size, w, h]
+            nmse_a = tf.sqrt(
+                tf.reduce_sum(
+                    tf.squared_difference(output, target), axis=[1, 2]))
+            nmse_b = tf.sqrt(tf.reduce_sum(tf.square(target), axis=[1, 2]))
+        elif output.get_shape().ndims == 4:  # [batch_size, w, h, c]
+            nmse_a = tf.sqrt(
+                tf.reduce_sum(
+                    tf.squared_difference(output, target), axis=[1, 2, 3]))
+            nmse_b = tf.sqrt(tf.reduce_sum(tf.square(target), axis=[1, 2, 3]))
         nmse = tf.reduce_mean(nmse_a / nmse_b)
     return nmse
+
 
 def absolute_difference_error(output, target, is_mean=False):
     """ Return the TensorFlow expression of absolute difference error (L1) of two batch of data.
@@ -141,27 +169,33 @@ def absolute_difference_error(output, target, is_mean=False):
     is_mean : boolean, if True, use ``tf.reduce_mean`` to compute the loss of one data, otherwise, use ``tf.reduce_sum`` (default).
     """
     with tf.name_scope("mean_squared_error_loss"):
-        if output.get_shape().ndims == 2:   # [batch_size, n_feature]
+        if output.get_shape().ndims == 2:  # [batch_size, n_feature]
             if is_mean:
-                loss = tf.reduce_mean(tf.reduce_mean(tf.abs(output - target), 1))
+                loss = tf.reduce_mean(
+                    tf.reduce_mean(tf.abs(output - target), 1))
             else:
-                loss = tf.reduce_mean(tf.reduce_sum(tf.abs(output - target), 1))
-        elif output.get_shape().ndims == 3: # [batch_size, w, h]
+                loss = tf.reduce_mean(
+                    tf.reduce_sum(tf.abs(output - target), 1))
+        elif output.get_shape().ndims == 3:  # [batch_size, w, h]
             if is_mean:
-                loss = tf.reduce_mean(tf.reduce_mean(tf.abs(output - target), [1, 2]))
+                loss = tf.reduce_mean(
+                    tf.reduce_mean(tf.abs(output - target), [1, 2]))
             else:
-                loss = tf.reduce_mean(tf.reduce_sum(tf.abs(output - target), [1, 2]))
-        elif output.get_shape().ndims == 4: # [batch_size, w, h, c]
+                loss = tf.reduce_mean(
+                    tf.reduce_sum(tf.abs(output - target), [1, 2]))
+        elif output.get_shape().ndims == 4:  # [batch_size, w, h, c]
             if is_mean:
-                loss = tf.reduce_mean(tf.reduce_mean(tf.abs(output - target), [1, 2, 3]))
+                loss = tf.reduce_mean(
+                    tf.reduce_mean(tf.abs(output - target), [1, 2, 3]))
             else:
-                loss = tf.reduce_mean(tf.reduce_sum(tf.abs(output - target), [1, 2, 3]))
+                loss = tf.reduce_mean(
+                    tf.reduce_sum(tf.abs(output - target), [1, 2, 3]))
         else:
             raise Exception("Unknow dimension")
         return loss
 
 
-def dice_coe(output, target, loss_type='jaccard', axis=[1,2,3], smooth=1e-5):
+def dice_coe(output, target, loss_type='jaccard', axis=[1, 2, 3], smooth=1e-5):
     """Soft dice (Sørensen or Jaccard) coefficient for comparing the similarity
     of two batch of data, usually be used for binary image segmentation
     i.e. labels are binary. The coefficient between 0 to 1, 1 means totally match.
@@ -212,7 +246,7 @@ def dice_coe(output, target, loss_type='jaccard', axis=[1,2,3], smooth=1e-5):
     return dice
 
 
-def dice_hard_coe(output, target, threshold=0.5, axis=[1,2,3], smooth=1e-5):
+def dice_hard_coe(output, target, threshold=0.5, axis=[1, 2, 3], smooth=1e-5):
     """Non-differentiable Sørensen–Dice coefficient for comparing the similarity
     of two batch of data, usually be used for binary image segmentation i.e. labels are binary.
     The coefficient between 0 to 1, 1 if totally match.
@@ -250,7 +284,7 @@ def dice_hard_coe(output, target, threshold=0.5, axis=[1,2,3], smooth=1e-5):
     return hard_dice
 
 
-def iou_coe(output, target, threshold=0.5, axis=[1,2,3], smooth=1e-5):
+def iou_coe(output, target, threshold=0.5, axis=[1, 2, 3], smooth=1e-5):
     """Non-differentiable Intersection over Union (IoU) for comparing the
     similarity of two batch of data, usually be used for evaluating binary image segmentation.
     The coefficient between 0 to 1, 1 means totally match.
@@ -274,15 +308,17 @@ def iou_coe(output, target, threshold=0.5, axis=[1,2,3], smooth=1e-5):
     """
     pre = tf.cast(output > threshold, dtype=tf.float32)
     truth = tf.cast(target > threshold, dtype=tf.float32)
-    inse = tf.reduce_sum(tf.multiply(pre, truth), axis=axis) # AND
-    union = tf.reduce_sum(tf.cast(tf.add(pre, truth)>= 1, dtype=tf.float32), axis=axis) # OR
+    inse = tf.reduce_sum(tf.multiply(pre, truth), axis=axis)  # AND
+    union = tf.reduce_sum(
+        tf.cast(tf.add(pre, truth) >= 1, dtype=tf.float32), axis=axis)  # OR
     ## old axis=[0,1,2,3]
     # epsilon = 1e-5
     # batch_iou = inse / (union + epsilon)
     ## new haodong
     batch_iou = (inse + smooth) / (union + smooth)
     iou = tf.reduce_mean(batch_iou)
-    return iou#, pre, truth, inse, union
+    return iou  #, pre, truth, inse, union
+
 
 # ## test soft/hard dice and iou
 # import numpy as np
@@ -318,7 +354,8 @@ def iou_coe(output, target, threshold=0.5, axis=[1,2,3], smooth=1e-5):
 # exit()
 
 
-def cross_entropy_seq(logits, target_seqs, batch_size=None):#, batch_size=1, num_steps=None):
+def cross_entropy_seq(logits, target_seqs,
+                      batch_size=None):  #, batch_size=1, num_steps=None):
     """Returns the expression of cross-entropy of two sequences, implement
     softmax internally. Normally be used for Fixed Length RNN outputs.
 
@@ -344,17 +381,20 @@ def cross_entropy_seq(logits, target_seqs, batch_size=None):#, batch_size=1, num
     #     sequence_loss_by_example_fn = tf.nn.seq2seq.sequence_loss_by_example
 
     loss = sequence_loss_by_example_fn(
-        [logits],
-        [tf.reshape(target_seqs, [-1])],
+        [logits], [tf.reshape(target_seqs, [-1])],
         [tf.ones_like(tf.reshape(target_seqs, [-1]), dtype=tf.float32)])
-        # [tf.ones([batch_size * num_steps])])
-    cost = tf.reduce_sum(loss) #/ batch_size
+    # [tf.ones([batch_size * num_steps])])
+    cost = tf.reduce_sum(loss)  #/ batch_size
     if batch_size is not None:
         cost = cost / batch_size
     return cost
 
 
-def cross_entropy_seq_with_mask(logits, target_seqs, input_mask, return_details=False, name=None):
+def cross_entropy_seq_with_mask(logits,
+                                target_seqs,
+                                input_mask,
+                                return_details=False,
+                                name=None):
     """Returns the expression of cross-entropy of two sequences, implement
     softmax internally. Normally be used for Dynamic RNN outputs.
 
@@ -374,15 +414,20 @@ def cross_entropy_seq_with_mask(logits, target_seqs, input_mask, return_details=
     --------
     - see Image Captioning Example.
     """
-    targets = tf.reshape(target_seqs, [-1])   # to one vector
-    weights = tf.to_float(tf.reshape(input_mask, [-1]))   # to one vector like targets
-    losses = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=targets, name=name) * weights
+    targets = tf.reshape(target_seqs, [-1])  # to one vector
+    weights = tf.to_float(tf.reshape(input_mask,
+                                     [-1]))  # to one vector like targets
+    losses = tf.nn.sparse_softmax_cross_entropy_with_logits(
+        logits=logits, labels=targets, name=name) * weights
     #losses = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=targets, name=name)) # for TF1.0 and others
 
     # try: ## TF1.0
-    loss = tf.divide(tf.reduce_sum(losses),   # loss from mask. reduce_sum before element-wise mul with mask !!
-                    tf.reduce_sum(weights),
-                    name="seq_loss_with_mask")
+    loss = tf.divide(
+        tf.reduce_sum(
+            losses
+        ),  # loss from mask. reduce_sum before element-wise mul with mask !!
+        tf.reduce_sum(weights),
+        name="seq_loss_with_mask")
     # except: ## TF0.12
     #     loss = tf.div(tf.reduce_sum(losses),   # loss from mask. reduce_sum before element-wise mul with mask !!
     #                     tf.reduce_sum(weights),
@@ -405,7 +450,9 @@ def cosine_similarity(v1, v2):
     a tensor of [batch_size, ]
     """
     # try: ## TF1.0
-    cost = tf.reduce_sum(tf.multiply(v1, v2), 1) / (tf.sqrt(tf.reduce_sum(tf.multiply(v1, v1), 1)) * tf.sqrt(tf.reduce_sum(tf.multiply(v2, v2), 1)))
+    cost = tf.reduce_sum(tf.multiply(v1, v2), 1) / (
+        tf.sqrt(tf.reduce_sum(tf.multiply(v1, v1), 1)
+                ) * tf.sqrt(tf.reduce_sum(tf.multiply(v2, v2), 1)))
     # except: ## TF0.12
     #     cost = tf.reduce_sum(tf.mul(v1, v2), reduction_indices=1) / (tf.sqrt(tf.reduce_sum(tf.mul(v1, v1), reduction_indices=1)) * tf.sqrt(tf.reduce_sum(tf.mul(v2, v2), reduction_indices=1)))
     return cost
@@ -413,7 +460,7 @@ def cosine_similarity(v1, v2):
 
 ## Regularization Functions
 def li_regularizer(scale, scope=None):
-  """li regularization removes the neurons of previous layer, `i` represents `inputs`.\n
+    """li regularization removes the neurons of previous layer, `i` represents `inputs`.\n
   Returns a function that can be used to apply group li regularization to weights.\n
   The implementation follows `TensorFlow contrib <https://github.com/tensorflow/tensorflow/blob/master/tensorflow/contrib/layers/python/layers/regularizers.py>`_.
 
@@ -431,44 +478,45 @@ def li_regularizer(scale, scope=None):
   ------
   ValueError : if scale is outside of the range [0.0, 1.0] or if scale is not a float.
   """
-  import numbers
-  from tensorflow.python.framework import ops
-  from tensorflow.python.ops import standard_ops
-  # from tensorflow.python.platform import tf_logging as logging
+    import numbers
+    from tensorflow.python.framework import ops
+    from tensorflow.python.ops import standard_ops
+    # from tensorflow.python.platform import tf_logging as logging
 
-  if isinstance(scale, numbers.Integral):
-    raise ValueError('scale cannot be an integer: %s' % scale)
-  if isinstance(scale, numbers.Real):
-    if scale < 0.:
-      raise ValueError('Setting a scale less than 0 on a regularizer: %g' %
-                       scale)
-    if scale >= 1.:
-      raise ValueError('Setting a scale greater than 1 on a regularizer: %g' %
-                       scale)
-    if scale == 0.:
-      logging.info('Scale of 0 disables regularizer.')
-      return lambda _, name=None: None
+    if isinstance(scale, numbers.Integral):
+        raise ValueError('scale cannot be an integer: %s' % scale)
+    if isinstance(scale, numbers.Real):
+        if scale < 0.:
+            raise ValueError(
+                'Setting a scale less than 0 on a regularizer: %g' % scale)
+        if scale >= 1.:
+            raise ValueError(
+                'Setting a scale greater than 1 on a regularizer: %g' % scale)
+        if scale == 0.:
+            logging.info('Scale of 0 disables regularizer.')
+            return lambda _, name=None: None
 
-  def li(weights, name=None):
-    """Applies li regularization to weights."""
-    with tf.name_scope('li_regularizer') as scope:
-        my_scale = ops.convert_to_tensor(scale,
-                                           dtype=weights.dtype.base_dtype,
-                                           name='scale')
-        # if tf.__version__ <= '0.12':
-        #     standard_ops_fn = standard_ops.mul
-        # else:
-        standard_ops_fn = standard_ops.multiply
-        return standard_ops_fn(
-          my_scale,
-          standard_ops.reduce_sum(standard_ops.sqrt(standard_ops.reduce_sum(tf.square(weights), 1))),
-          name=scope)
-  return li
+    def li(weights, name=None):
+        """Applies li regularization to weights."""
+        with tf.name_scope('li_regularizer') as scope:
+            my_scale = ops.convert_to_tensor(
+                scale, dtype=weights.dtype.base_dtype, name='scale')
+            # if tf.__version__ <= '0.12':
+            #     standard_ops_fn = standard_ops.mul
+            # else:
+            standard_ops_fn = standard_ops.multiply
+            return standard_ops_fn(
+                my_scale,
+                standard_ops.reduce_sum(
+                    standard_ops.sqrt(
+                        standard_ops.reduce_sum(tf.square(weights), 1))),
+                name=scope)
 
+    return li
 
 
 def lo_regularizer(scale, scope=None):
-  """lo regularization removes the neurons of current layer, `o` represents `outputs`\n
+    """lo regularization removes the neurons of current layer, `o` represents `outputs`\n
   Returns a function that can be used to apply group lo regularization to weights.\n
   The implementation follows `TensorFlow contrib <https://github.com/tensorflow/tensorflow/blob/master/tensorflow/contrib/layers/python/layers/regularizers.py>`_.
 
@@ -486,42 +534,45 @@ def lo_regularizer(scale, scope=None):
   ------
   ValueError : If scale is outside of the range [0.0, 1.0] or if scale is not a float.
   """
-  import numbers
-  from tensorflow.python.framework import ops
-  from tensorflow.python.ops import standard_ops
-  # from tensorflow.python.platform import tf_logging as logging
+    import numbers
+    from tensorflow.python.framework import ops
+    from tensorflow.python.ops import standard_ops
+    # from tensorflow.python.platform import tf_logging as logging
 
-  if isinstance(scale, numbers.Integral):
-    raise ValueError('scale cannot be an integer: %s' % scale)
-  if isinstance(scale, numbers.Real):
-    if scale < 0.:
-      raise ValueError('Setting a scale less than 0 on a regularizer: %g' %
-                       scale)
-    if scale >= 1.:
-      raise ValueError('Setting a scale greater than 1 on a regularizer: %g' %
-                       scale)
-    if scale == 0.:
-      logging.info('Scale of 0 disables regularizer.')
-      return lambda _, name=None: None
+    if isinstance(scale, numbers.Integral):
+        raise ValueError('scale cannot be an integer: %s' % scale)
+    if isinstance(scale, numbers.Real):
+        if scale < 0.:
+            raise ValueError(
+                'Setting a scale less than 0 on a regularizer: %g' % scale)
+        if scale >= 1.:
+            raise ValueError(
+                'Setting a scale greater than 1 on a regularizer: %g' % scale)
+        if scale == 0.:
+            logging.info('Scale of 0 disables regularizer.')
+            return lambda _, name=None: None
 
-  def lo(weights, name='lo_regularizer'):
-    """Applies group column regularization to weights."""
-    with tf.name_scope(name) as scope:
-        my_scale = ops.convert_to_tensor(scale,
-                                       dtype=weights.dtype.base_dtype,
-                                       name='scale')
-        # if tf.__version__ <= '0.12':
-        #     standard_ops_fn = standard_ops.mul
-        # else:
-        standard_ops_fn = standard_ops.multiply
-        return standard_ops_fn(
-          my_scale,
-          standard_ops.reduce_sum(standard_ops.sqrt(standard_ops.reduce_sum(tf.square(weights), 0))),
-          name=scope)
-  return lo
+    def lo(weights, name='lo_regularizer'):
+        """Applies group column regularization to weights."""
+        with tf.name_scope(name) as scope:
+            my_scale = ops.convert_to_tensor(
+                scale, dtype=weights.dtype.base_dtype, name='scale')
+            # if tf.__version__ <= '0.12':
+            #     standard_ops_fn = standard_ops.mul
+            # else:
+            standard_ops_fn = standard_ops.multiply
+            return standard_ops_fn(
+                my_scale,
+                standard_ops.reduce_sum(
+                    standard_ops.sqrt(
+                        standard_ops.reduce_sum(tf.square(weights), 0))),
+                name=scope)
+
+    return lo
+
 
 def maxnorm_regularizer(scale=1.0, scope=None):
-  """Max-norm regularization returns a function that can be used
+    """Max-norm regularization returns a function that can be used
   to apply max-norm regularization to weights.
   About max-norm: `wiki <https://en.wikipedia.org/wiki/Matrix_norm#Max_norm>`_.\n
   The implementation follows `TensorFlow contrib <https://github.com/tensorflow/tensorflow/blob/master/tensorflow/contrib/layers/python/layers/regularizers.py>`_.
@@ -540,38 +591,42 @@ def maxnorm_regularizer(scale=1.0, scope=None):
   --------
   ValueError : If scale is outside of the range [0.0, 1.0] or if scale is not a float.
   """
-  import numbers
-  from tensorflow.python.framework import ops
-  from tensorflow.python.ops import standard_ops
+    import numbers
+    from tensorflow.python.framework import ops
+    from tensorflow.python.ops import standard_ops
 
-  if isinstance(scale, numbers.Integral):
-    raise ValueError('scale cannot be an integer: %s' % scale)
-  if isinstance(scale, numbers.Real):
-    if scale < 0.:
-      raise ValueError('Setting a scale less than 0 on a regularizer: %g' %
-                       scale)
-    # if scale >= 1.:
-    #   raise ValueError('Setting a scale greater than 1 on a regularizer: %g' %
-    #                    scale)
-    if scale == 0.:
-      logging.info('Scale of 0 disables regularizer.')
-      return lambda _, name=None: None
+    if isinstance(scale, numbers.Integral):
+        raise ValueError('scale cannot be an integer: %s' % scale)
+    if isinstance(scale, numbers.Real):
+        if scale < 0.:
+            raise ValueError(
+                'Setting a scale less than 0 on a regularizer: %g' % scale)
+        # if scale >= 1.:
+        #   raise ValueError('Setting a scale greater than 1 on a regularizer: %g' %
+        #                    scale)
+        if scale == 0.:
+            logging.info('Scale of 0 disables regularizer.')
+            return lambda _, name=None: None
 
-  def mn(weights, name='max_regularizer'):
-    """Applies max-norm regularization to weights."""
-    with tf.name_scope(name) as scope:
-          my_scale = ops.convert_to_tensor(scale,
-                                           dtype=weights.dtype.base_dtype,
-                                           name='scale')
-        #   if tf.__version__ <= '0.12':
-        #       standard_ops_fn = standard_ops.mul
-        #   else:
-          standard_ops_fn = standard_ops.multiply
-          return standard_ops_fn(my_scale, standard_ops.reduce_max(standard_ops.abs(weights)), name=scope)
-  return mn
+    def mn(weights, name='max_regularizer'):
+        """Applies max-norm regularization to weights."""
+        with tf.name_scope(name) as scope:
+            my_scale = ops.convert_to_tensor(
+                scale, dtype=weights.dtype.base_dtype, name='scale')
+            #   if tf.__version__ <= '0.12':
+            #       standard_ops_fn = standard_ops.mul
+            #   else:
+            standard_ops_fn = standard_ops.multiply
+            return standard_ops_fn(
+                my_scale,
+                standard_ops.reduce_max(standard_ops.abs(weights)),
+                name=scope)
+
+    return mn
+
 
 def maxnorm_o_regularizer(scale, scope):
-  """Max-norm output regularization removes the neurons of current layer.\n
+    """Max-norm output regularization removes the neurons of current layer.\n
   Returns a function that can be used to apply max-norm regularization to each column of weight matrix.\n
   The implementation follows `TensorFlow contrib <https://github.com/tensorflow/tensorflow/blob/master/tensorflow/contrib/layers/python/layers/regularizers.py>`_.
 
@@ -589,38 +644,43 @@ def maxnorm_o_regularizer(scale, scope):
   ---------
   ValueError : If scale is outside of the range [0.0, 1.0] or if scale is not a float.
   """
-  import numbers
-  from tensorflow.python.framework import ops
-  from tensorflow.python.ops import standard_ops
+    import numbers
+    from tensorflow.python.framework import ops
+    from tensorflow.python.ops import standard_ops
 
-  if isinstance(scale, numbers.Integral):
-    raise ValueError('scale cannot be an integer: %s' % scale)
-  if isinstance(scale, numbers.Real):
-    if scale < 0.:
-      raise ValueError('Setting a scale less than 0 on a regularizer: %g' %
-                       scale)
-    # if scale >= 1.:
-    #   raise ValueError('Setting a scale greater than 1 on a regularizer: %g' %
-    #                    scale)
-    if scale == 0.:
-      logging.info('Scale of 0 disables regularizer.')
-      return lambda _, name=None: None
+    if isinstance(scale, numbers.Integral):
+        raise ValueError('scale cannot be an integer: %s' % scale)
+    if isinstance(scale, numbers.Real):
+        if scale < 0.:
+            raise ValueError(
+                'Setting a scale less than 0 on a regularizer: %g' % scale)
+        # if scale >= 1.:
+        #   raise ValueError('Setting a scale greater than 1 on a regularizer: %g' %
+        #                    scale)
+        if scale == 0.:
+            logging.info('Scale of 0 disables regularizer.')
+            return lambda _, name=None: None
 
-  def mn_o(weights, name='maxnorm_o_regularizer'):
-     """Applies max-norm regularization to weights."""
-     with tf.name_scope(name) as scope:
-          my_scale = ops.convert_to_tensor(scale,
-                                           dtype=weights.dtype.base_dtype,
-                                                   name='scale')
-          if tf.__version__ <= '0.12':
-             standard_ops_fn = standard_ops.mul
-          else:
-             standard_ops_fn = standard_ops.multiply
-          return standard_ops_fn(my_scale, standard_ops.reduce_sum(standard_ops.reduce_max(standard_ops.abs(weights), 0)), name=scope)
-  return mn_o
+    def mn_o(weights, name='maxnorm_o_regularizer'):
+        """Applies max-norm regularization to weights."""
+        with tf.name_scope(name) as scope:
+            my_scale = ops.convert_to_tensor(
+                scale, dtype=weights.dtype.base_dtype, name='scale')
+            if tf.__version__ <= '0.12':
+                standard_ops_fn = standard_ops.mul
+            else:
+                standard_ops_fn = standard_ops.multiply
+            return standard_ops_fn(
+                my_scale,
+                standard_ops.reduce_sum(
+                    standard_ops.reduce_max(standard_ops.abs(weights), 0)),
+                name=scope)
+
+    return mn_o
+
 
 def maxnorm_i_regularizer(scale, scope=None):
-  """Max-norm input regularization removes the neurons of previous layer.\n
+    """Max-norm input regularization removes the neurons of previous layer.\n
   Returns a function that can be used to apply max-norm regularization to each row of weight matrix.\n
   The implementation follows `TensorFlow contrib <https://github.com/tensorflow/tensorflow/blob/master/tensorflow/contrib/layers/python/layers/regularizers.py>`_.
 
@@ -638,38 +698,39 @@ def maxnorm_i_regularizer(scale, scope=None):
   ---------
   ValueError : If scale is outside of the range [0.0, 1.0] or if scale is not a float.
   """
-  import numbers
-  from tensorflow.python.framework import ops
-  from tensorflow.python.ops import standard_ops
+    import numbers
+    from tensorflow.python.framework import ops
+    from tensorflow.python.ops import standard_ops
 
-  if isinstance(scale, numbers.Integral):
-    raise ValueError('scale cannot be an integer: %s' % scale)
-  if isinstance(scale, numbers.Real):
-    if scale < 0.:
-      raise ValueError('Setting a scale less than 0 on a regularizer: %g' %
-                       scale)
-    # if scale >= 1.:
-    #   raise ValueError('Setting a scale greater than 1 on a regularizer: %g' %
-    #                    scale)
-    if scale == 0.:
-      logging.info('Scale of 0 disables regularizer.')
-      return lambda _, name=None: None
+    if isinstance(scale, numbers.Integral):
+        raise ValueError('scale cannot be an integer: %s' % scale)
+    if isinstance(scale, numbers.Real):
+        if scale < 0.:
+            raise ValueError(
+                'Setting a scale less than 0 on a regularizer: %g' % scale)
+        # if scale >= 1.:
+        #   raise ValueError('Setting a scale greater than 1 on a regularizer: %g' %
+        #                    scale)
+        if scale == 0.:
+            logging.info('Scale of 0 disables regularizer.')
+            return lambda _, name=None: None
 
-  def mn_i(weights, name='maxnorm_i_regularizer'):
-     """Applies max-norm regularization to weights."""
-     with tf.name_scope(name) as scope:
-          my_scale = ops.convert_to_tensor(scale,
-                                           dtype=weights.dtype.base_dtype,
-                                                   name='scale')
-          if tf.__version__ <= '0.12':
-             standard_ops_fn = standard_ops.mul
-          else:
-             standard_ops_fn = standard_ops.multiply
-          return standard_ops_fn(my_scale, standard_ops.reduce_sum(standard_ops.reduce_max(standard_ops.abs(weights), 1)), name=scope)
-  return mn_i
+    def mn_i(weights, name='maxnorm_i_regularizer'):
+        """Applies max-norm regularization to weights."""
+        with tf.name_scope(name) as scope:
+            my_scale = ops.convert_to_tensor(
+                scale, dtype=weights.dtype.base_dtype, name='scale')
+            if tf.__version__ <= '0.12':
+                standard_ops_fn = standard_ops.mul
+            else:
+                standard_ops_fn = standard_ops.multiply
+            return standard_ops_fn(
+                my_scale,
+                standard_ops.reduce_sum(
+                    standard_ops.reduce_max(standard_ops.abs(weights), 1)),
+                name=scope)
 
-
-
+    return mn_i
 
 
 #

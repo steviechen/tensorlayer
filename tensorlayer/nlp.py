@@ -16,11 +16,14 @@ import tensorflow as tf
 from six.moves import urllib, xrange
 from tensorflow.python.platform import gfile
 
-
 # Iteration functions
 
 
-def generate_skip_gram_batch(data, batch_size, num_skips, skip_window, data_index=0):
+def generate_skip_gram_batch(data,
+                             batch_size,
+                             num_skips,
+                             skip_window,
+                             data_index=0):
     """Generate a training batch for the Skip-Gram model.
 
     Parameters
@@ -135,6 +138,7 @@ def sample(a=[], temperature=1.0):
         # exit()
         message = "For large vocabulary_size, choice a higher temperature\
          to avoid log error. Hint : use ``sample_top``. "
+
         warnings.warn(message, Warning)
         # print(a)
         # print(b)
@@ -257,8 +261,11 @@ class Vocabulary(object):
 
         vocab = dict([(x, y) for (y, x) in enumerate(reverse_vocab)])
 
-        print("  [TL] Vocabulary from %s : %s %s %s" % (vocab_file, start_word, end_word, unk_word))
-        print("    vocabulary with %d words (includes start_word, end_word, unk_word)" % len(vocab))
+        print("  [TL] Vocabulary from %s : %s %s %s" % (vocab_file, start_word,
+                                                        end_word, unk_word))
+        print(
+            "    vocabulary with %d words (includes start_word, end_word, unk_word)"
+            % len(vocab))
         # tf.logging.info("     vocabulary with %d words" % len(vocab))
 
         self.vocab = vocab  # vocab[word] = id
@@ -387,7 +394,8 @@ def create_vocab(sentences, word_counts_output_file, min_word_count=1):
     # Filter uncommon words and sort by descending count.
     word_counts = [x for x in counter.items() if x[1] >= min_word_count]
     word_counts.sort(key=lambda x: x[1], reverse=True)
-    word_counts = [("<PAD>", 0)] + word_counts  # 1st id should be reserved for padding
+    word_counts = [("<PAD>", 0)
+                   ] + word_counts  # 1st id should be reserved for padding
     # print(word_counts)
     print("    Words in vocabulary: %d" % len(word_counts))
 
@@ -444,7 +452,7 @@ def read_words(filename="nietzsche.txt", replace=['\n', '<eos>']):
     - `tensorflow.models.rnn.ptb.reader <https://github.com/tensorflow/tensorflow/tree/master/tensorflow/models/rnn/ptb>`_
     """
     with tf.gfile.GFile(filename, "r") as f:
-        try:    # python 3.4 or older
+        try:  # python 3.4 or older
             context_list = f.read().replace(*replace).split()
         except:  # python 3.5
             f.seek(0)
@@ -573,7 +581,10 @@ def build_reverse_dictionary(word_to_id):
     return reverse_dictionary
 
 
-def build_words_dataset(words=[], vocabulary_size=50000, printable=True, unk_key='UNK'):
+def build_words_dataset(words=[],
+                        vocabulary_size=50000,
+                        printable=True,
+                        unk_key='UNK'):
     """Build the words dictionary and replace rare words with 'UNK' token.
     The most common word has the smallest integer id.
 
@@ -631,7 +642,8 @@ def build_words_dataset(words=[], vocabulary_size=50000, printable=True, unk_key
     count[0][1] = unk_count
     reverse_dictionary = dict(zip(dictionary.values(), dictionary.keys()))
     if printable:
-        print('Real vocabulary size    %d' % len(collections.Counter(words).keys()))
+        print('Real vocabulary size    %d' % len(
+            collections.Counter(words).keys()))
         print('Limited vocabulary size {}'.format(vocabulary_size))
     assert len(collections.Counter(words).keys()) >= vocabulary_size, \
         "the limited vocabulary_size must be less than or equal to the read vocabulary_size"
@@ -755,6 +767,7 @@ def save_vocab(count=[], name='vocab.txt'):
             f.write("%s %d\n" % (tf.compat.as_text(count[i][0]), count[i][1]))
     print("%d vocab saved to %s in %s" % (vocabulary_size, name, pwd))
 
+
 # Functions for translation
 
 
@@ -794,8 +807,11 @@ def basic_tokenizer(sentence, _WORD_SPLIT=re.compile(b"([.,!?\"':;)(])")):
     return [w for w in words if w]
 
 
-def create_vocabulary(vocabulary_path, data_path, max_vocabulary_size,
-                      tokenizer=None, normalize_digits=True,
+def create_vocabulary(vocabulary_path,
+                      data_path,
+                      max_vocabulary_size,
+                      tokenizer=None,
+                      normalize_digits=True,
                       _DIGIT_RE=re.compile(br"\d"),
                       _START_VOCAB=[b"_PAD", b"_GO", b"_EOS", b"_UNK"]):
     """Create vocabulary file (if it does not exist yet) from data file.
@@ -821,7 +837,8 @@ def create_vocabulary(vocabulary_path, data_path, max_vocabulary_size,
     - Code from ``/tensorflow/models/rnn/translation/data_utils.py``
     """
     if not gfile.Exists(vocabulary_path):
-        print("Creating vocabulary %s from data %s" % (vocabulary_path, data_path))
+        print("Creating vocabulary %s from data %s" % (vocabulary_path,
+                                                       data_path))
         vocab = {}
         with gfile.GFile(data_path, mode="rb") as f:
             counter = 0
@@ -829,21 +846,25 @@ def create_vocabulary(vocabulary_path, data_path, max_vocabulary_size,
                 counter += 1
                 if counter % 100000 == 0:
                     print("  processing line %d" % counter)
-                tokens = tokenizer(line) if tokenizer else basic_tokenizer(line)
+                tokens = tokenizer(line) if tokenizer else basic_tokenizer(
+                    line)
                 for w in tokens:
-                    word = re.sub(_DIGIT_RE, b"0", w) if normalize_digits else w
+                    word = re.sub(_DIGIT_RE, b"0",
+                                  w) if normalize_digits else w
                     if word in vocab:
                         vocab[word] += 1
                     else:
                         vocab[word] = 1
-            vocab_list = _START_VOCAB + sorted(vocab, key=vocab.get, reverse=True)
+            vocab_list = _START_VOCAB + sorted(
+                vocab, key=vocab.get, reverse=True)
             if len(vocab_list) > max_vocabulary_size:
                 vocab_list = vocab_list[:max_vocabulary_size]
             with gfile.GFile(vocabulary_path, mode="wb") as vocab_file:
                 for w in vocab_list:
                     vocab_file.write(w + b"\n")
     else:
-        print("Vocabulary %s from data %s exists" % (vocabulary_path, data_path))
+        print("Vocabulary %s from data %s exists" % (vocabulary_path,
+                                                     data_path))
 
 
 def initialize_vocabulary(vocabulary_path):
@@ -894,9 +915,12 @@ def initialize_vocabulary(vocabulary_path):
         raise ValueError("Vocabulary file %s not found.", vocabulary_path)
 
 
-def sentence_to_token_ids(sentence, vocabulary,
-                          tokenizer=None, normalize_digits=True,
-                          UNK_ID=3, _DIGIT_RE=re.compile(br"\d")):
+def sentence_to_token_ids(sentence,
+                          vocabulary,
+                          tokenizer=None,
+                          normalize_digits=True,
+                          UNK_ID=3,
+                          _DIGIT_RE=re.compile(br"\d")):
     """Convert a string to list of integers representing token-ids.
 
     For example, a sentence "I have a dog" may become tokenized into
@@ -929,9 +953,13 @@ def sentence_to_token_ids(sentence, vocabulary,
     return [vocabulary.get(re.sub(_DIGIT_RE, b"0", w), UNK_ID) for w in words]
 
 
-def data_to_token_ids(data_path, target_path, vocabulary_path,
-                      tokenizer=None, normalize_digits=True,
-                      UNK_ID=3, _DIGIT_RE=re.compile(br"\d")):
+def data_to_token_ids(data_path,
+                      target_path,
+                      vocabulary_path,
+                      tokenizer=None,
+                      normalize_digits=True,
+                      UNK_ID=3,
+                      _DIGIT_RE=re.compile(br"\d")):
     """Tokenize data file and turn into token-ids using given vocabulary file.
 
     This function loads data line-by-line from data_path, calls the above
@@ -961,14 +989,17 @@ def data_to_token_ids(data_path, target_path, vocabulary_path,
                     counter += 1
                     if counter % 100000 == 0:
                         print("  tokenizing line %d" % counter)
-                    token_ids = sentence_to_token_ids(line, vocab, tokenizer,
-                                                      normalize_digits, UNK_ID=UNK_ID,
-                                                      _DIGIT_RE=_DIGIT_RE)
-                    tokens_file.write(" ".join([str(tok) for tok in token_ids]) + "\n")
+                    token_ids = sentence_to_token_ids(
+                        line,
+                        vocab,
+                        tokenizer,
+                        normalize_digits,
+                        UNK_ID=UNK_ID,
+                        _DIGIT_RE=_DIGIT_RE)
+                    tokens_file.write(" ".join([str(tok)
+                                                for tok in token_ids]) + "\n")
     else:
         print("Target path %s exists" % target_path)
-
-
 
 
 def moses_multi_bleu(hypotheses, references, lowercase=False):  # tl.nlp
@@ -1035,7 +1066,8 @@ def moses_multi_bleu(hypotheses, references, lowercase=False):  # tl.nlp
             bleu_score = float(bleu_score)
         except subprocess.CalledProcessError as error:
             if error.output is not None:
-                tf.logging.warning("multi-bleu.perl script returned non-zero exit code")
+                tf.logging.warning(
+                    "multi-bleu.perl script returned non-zero exit code")
                 tf.logging.warning(error.output)
             bleu_score = np.float32(0.0)
 
