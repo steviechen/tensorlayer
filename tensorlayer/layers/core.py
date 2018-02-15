@@ -677,7 +677,8 @@ class AverageEmbeddingInputlayer(Layer):
             embeddings_initializer=tf.random_uniform_initializer(-0.1, 0.1),
             embeddings_kwargs=None,
     ):
-        super().__init__(name=name)
+        # super().__init__(name=name) # hao: can't work for py2
+        Layer.__init__(self, name=name)
 
         # if embeddings_kwargs is None:
         #     embeddings_kwargs = {}
